@@ -41,11 +41,46 @@ export default function ProfileDisplay({ user }: ProfileDisplayProps) {
 
       <div className="px-6 py-6">
         <dl className="space-y-6">
-          <div>
-            <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Full Name</dt>
-            <dd className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
-              {user.fullName}
-            </dd>
+          {/* Primary info: First Name, Last Name, Nationality, Birthday */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">First Name</dt>
+              <dd className="mt-1 text-xl font-bold text-gray-900 dark:text-white">
+                {user.firstName}
+              </dd>
+            </div>
+
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Last Name</dt>
+              <dd className="mt-1 text-xl font-bold text-gray-900 dark:text-white">
+                {user.lastName}
+              </dd>
+            </div>
+
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Nationality</dt>
+              <dd className="mt-1 text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <svg className="h-5 w-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {user.nationality || 'N/A'}
+              </dd>
+            </div>
+
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Date of Birth</dt>
+              <dd className="mt-1 text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <svg className="h-5 w-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                {user.dateOfBirth || 'N/A'}
+              </dd>
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-4">Additional Information</h3>
           </div>
 
           <div>
@@ -68,26 +103,6 @@ export default function ProfileDisplay({ user }: ProfileDisplayProps) {
               {user.email}
             </dd>
           </div>
-
-          {user.dateOfBirth && (
-            <div>
-              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                Date of Birth
-              </dt>
-              <dd className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
-                {user.dateOfBirth}
-              </dd>
-            </div>
-          )}
-
-          {user.nationality && (
-            <div>
-              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Nationality</dt>
-              <dd className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
-                {user.nationality}
-              </dd>
-            </div>
-          )}
         </dl>
 
         <div className="mt-8 border-t border-gray-200 dark:border-gray-700 pt-6">

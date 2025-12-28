@@ -33,6 +33,19 @@ UAE_PASS_SCOPE=urn:uae:digitalid:profile:general
 # Session secret for encrypting session data (generate a random string)
 # You can generate one using: openssl rand -base64 32
 SESSION_SECRET=your_random_session_secret_here
+
+# ============================================
+# FXBackoffice CRM Integration
+# ============================================
+
+# CRM API Base URL
+CRM_BASE_URL=https://my.cmsfinancial.ae
+
+# CRM API Bearer Token (obtain from CRM admin)
+CRM_API_TOKEN=your_crm_api_token_here
+
+# CRM API Version
+CRM_API_VERSION=1.0.0
 ```
 
 ## Troubleshooting "Client credentials are invalid"

@@ -3,6 +3,14 @@
  * 
  * Handles the OAuth 2.0 callback processing as a Server Action
  * Server Actions CAN modify cookies, unlike Server Components
+ * 
+ * Flow:
+ * 1. Exchange authorization code for tokens
+ * 2. Fetch user info from UAE PASS
+ * 3. Check if user exists in CRM (by email)
+ * 4. If not exists, register user in CRM
+ * 5. Get direct login URL from CRM
+ * 6. Return redirect URL for CRM login
  */
 
 'use server';
@@ -17,6 +25,7 @@ import {
   normalizeUserProfile,
   NormalizedUserProfile,
 } from '@/lib/uaePass';
+import { handleCRMAuth } from '@/lib/crmApi';
 
 const SESSION_COOKIE_NAME = 'uaepass_session';
 const STATE_COOKIE_NAME = 'uaepass_state';
@@ -32,6 +41,8 @@ export interface CallbackResult {
   success: boolean;
   error?: string;
   user?: NormalizedUserProfile;
+  crmLoginUrl?: string;
+  isNewCRMUser?: boolean;
 }
 
 export async function processUAEPassCallback(
@@ -75,10 +86,12 @@ export async function processUAEPassCallback(
     // Step 4: Fetch user information
     console.log('Fetching user info...');
     const userInfo = await fetchUserInfo(tokens.access_token);
-    console.log('User info fetched');
+    console.log('User info fetched - RAW RESPONSE:', JSON.stringify(userInfo, null, 2));
+    console.log('Available fields:', Object.keys(userInfo));
 
     // Step 5: Normalize user profile
     const normalizedProfile = normalizeUserProfile(userInfo);
+    console.log('Normalized profile:', JSON.stringify(normalizedProfile, null, 2));
 
     // Step 6: Create session
     const expiresIn = tokens.expires_in || 3600;
@@ -111,7 +124,43 @@ export async function processUAEPassCallback(
     cookieStore.delete(NONCE_COOKIE_NAME);
     cookieStore.delete(PKCE_COOKIE_NAME);
 
-    return { success: true, user: normalizedProfile };
+    // Step 7: CRM Integration - Login or Register user
+    console.log('========================================');
+    console.log('[CALLBACK] Step 7: Starting CRM integration...');
+    console.log('========================================');
+
+    try {
+      const crmResult = await handleCRMAuth(normalizedProfile);
+
+      if (crmResult.success && crmResult.loginUrl) {
+        console.log('[CALLBACK] CRM integration successful');
+        console.log('[CALLBACK] Is new CRM user:', crmResult.isNewUser);
+        console.log('[CALLBACK] CRM Login URL:', crmResult.loginUrl);
+
+        return {
+          success: true,
+          user: normalizedProfile,
+          crmLoginUrl: crmResult.loginUrl,
+          isNewCRMUser: crmResult.isNewUser,
+        };
+      } else {
+        console.error('[CALLBACK] CRM integration failed:', crmResult.error);
+        // Still return success for UAE Pass, but without CRM URL
+        return {
+          success: true,
+          user: normalizedProfile,
+          error: `CRM integration failed: ${crmResult.error}`,
+        };
+      }
+    } catch (crmError) {
+      console.error('[CALLBACK] CRM integration error:', crmError);
+      // Still return success for UAE Pass, but note the CRM error
+      return {
+        success: true,
+        user: normalizedProfile,
+        error: `CRM error: ${crmError instanceof Error ? crmError.message : 'Unknown error'}`,
+      };
+    }
   } catch (error) {
     console.error('Callback processing error:', error);
 

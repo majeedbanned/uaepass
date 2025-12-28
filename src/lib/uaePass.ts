@@ -48,6 +48,8 @@ export interface UAEPassUserProfile {
 // Normalized User Profile for our application
 export interface NormalizedUserProfile {
   fullName: string;
+  firstName: string;
+  lastName: string;
   emiratesId: string;
   mobile: string;
   email: string;
@@ -349,39 +351,85 @@ export async function fetchUserInfo(accessToken: string): Promise<UAEPassUserPro
 
 /**
  * Normalize UAE PASS user profile to our application's user profile format
+ * 
+ * UAE PASS field names (as per documentation):
+ * - firstnameEN, firstnameAR
+ * - lastnameEN, lastnameAR
+ * - fullnameEN, fullnameAR
+ * - nationalityEN, nationalityAR
+ * - dob (date of birth)
+ * - gender
+ * - mobile
+ * - email
+ * - idn (Emirates ID)
+ * - uuid (user unique ID)
+ * - sub (subject identifier)
  */
 export function normalizeUserProfile(profile: UAEPassUserProfile): NormalizedUserProfile {
-  // UAE PASS may return different field names, so we handle various formats
+  // UAE PASS uses specific field names - prioritize those first
+  const firstName =
+    profile.firstnameEN ||     // UAE PASS primary field
+    profile.firstnameAR ||     // UAE PASS Arabic field
+    profile.firstName ||       // Alternative naming
+    profile.given_name ||      // OIDC standard
+    '';
+
+  const lastName =
+    profile.lastnameEN ||      // UAE PASS primary field
+    profile.lastnameAR ||      // UAE PASS Arabic field
+    profile.lastName ||        // Alternative naming
+    profile.family_name ||     // OIDC standard
+    '';
+
   const fullName =
-    profile.fullName ||
-    `${profile.firstName || ''} ${profile.lastName || ''}`.trim() ||
+    profile.fullnameEN ||      // UAE PASS primary field
+    profile.fullnameAR ||      // UAE PASS Arabic field
+    profile.fullName ||        // Alternative naming
+    `${firstName} ${lastName}`.trim() ||
     profile.name ||
     '';
 
   const emiratesId =
-    profile.emiratesId ||
-    profile.idn ||
+    profile.idn ||             // UAE PASS primary field (Emirates ID)
+    profile.emiratesId ||      // Alternative naming
     profile.sub ||
     '';
 
   const mobile =
-    profile.mobile ||
+    profile.mobile ||          // UAE PASS primary field
     profile.phoneNumber ||
     profile.phone ||
     '';
 
   const email =
-    profile.email ||
+    profile.email ||           // UAE PASS primary field
     profile.emailAddress ||
+    '';
+
+  // UAE PASS uses 'dob' for date of birth
+  const dateOfBirth =
+    profile.dob ||             // UAE PASS primary field
+    profile.dateOfBirth ||     // Alternative naming
+    profile.birthdate ||       // OIDC standard
+    '';
+
+  // UAE PASS uses 'nationalityEN' for nationality
+  const nationality =
+    profile.nationalityEN ||   // UAE PASS primary field
+    profile.nationalityAR ||   // UAE PASS Arabic field
+    profile.nationality ||     // Alternative naming
+    profile.country ||
     '';
 
   return {
     fullName: fullName || 'N/A',
+    firstName: firstName || 'N/A',
+    lastName: lastName || 'N/A',
     emiratesId: emiratesId || 'N/A',
     mobile: mobile || 'N/A',
     email: email || 'N/A',
-    dateOfBirth: profile.dateOfBirth || profile.birthdate,
-    nationality: profile.nationality || profile.country,
+    dateOfBirth: dateOfBirth || undefined,
+    nationality: nationality || undefined,
     sub: profile.sub,
   };
 }
