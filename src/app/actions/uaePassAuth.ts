@@ -1,22 +1,13 @@
 /**
- * UAE PASS Callback Server Action
+ * UAE PASS Authentication Server Action
  * 
- * Handles the OAuth 2.0 callback processing as a Server Action
- * Server Actions CAN modify cookies, unlike Server Components
- * 
- * Flow:
- * 1. Exchange authorization code for tokens
- * 2. Fetch user info from UAE PASS
- * 3. Check if user exists in CRM (by email)
- * 4. If not exists, register user in CRM
- * 5. Get direct login URL from CRM
- * 6. Return redirect URL for CRM login
+ * Processes UAE PASS authentication WITHOUT CRM integration.
+ * This is the first step - just get user info from UAE PASS and show it.
  */
 
 'use server';
 
 import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
 import { SignJWT } from 'jose';
 import {
   exchangeCodeForTokens,
@@ -25,7 +16,6 @@ import {
   normalizeUserProfile,
   NormalizedUserProfile,
 } from '@/lib/uaePass';
-import { handleCRMAuth } from '@/lib/crmApi';
 
 const SESSION_COOKIE_NAME = 'uaepass_session';
 const STATE_COOKIE_NAME = 'uaepass_state';
@@ -37,18 +27,20 @@ function getSessionSecret(): Uint8Array {
   return new TextEncoder().encode(secret);
 }
 
-export interface CallbackResult {
+export interface UAEPassAuthResult {
   success: boolean;
   error?: string;
   user?: NormalizedUserProfile;
-  crmLoginUrl?: string;
-  isNewCRMUser?: boolean;
 }
 
-export async function processUAEPassCallback(
+/**
+ * Process UAE PASS authentication and return user info
+ * Does NOT perform CRM integration - that happens separately after user confirmation
+ */
+export async function processUAEPassAuth(
   code: string,
   state: string
-): Promise<CallbackResult> {
+): Promise<UAEPassAuthResult> {
   const cookieStore = await cookies();
 
   try {
@@ -93,7 +85,7 @@ export async function processUAEPassCallback(
     const normalizedProfile = normalizeUserProfile(userInfo);
     console.log('Normalized profile:', JSON.stringify(normalizedProfile, null, 2));
 
-    // Step 6: Create session
+    // Step 6: Create session (store user info temporarily)
     const expiresIn = tokens.expires_in || 3600;
     const expiresAt = Date.now() + expiresIn * 1000;
 
@@ -124,45 +116,13 @@ export async function processUAEPassCallback(
     cookieStore.delete(NONCE_COOKIE_NAME);
     cookieStore.delete(PKCE_COOKIE_NAME);
 
-    // Step 7: CRM Integration - Login or Register user
-    console.log('========================================');
-    console.log('[CALLBACK] Step 7: Starting CRM integration...');
-    console.log('========================================');
-
-    try {
-      const crmResult = await handleCRMAuth(normalizedProfile);
-
-      if (crmResult.success && crmResult.loginUrl) {
-        console.log('[CALLBACK] CRM integration successful');
-        console.log('[CALLBACK] Is new CRM user:', crmResult.isNewUser);
-        console.log('[CALLBACK] CRM Login URL:', crmResult.loginUrl);
-
-        return {
-          success: true,
-          user: normalizedProfile,
-          crmLoginUrl: crmResult.loginUrl,
-          isNewCRMUser: crmResult.isNewUser,
-        };
-      } else {
-        console.error('[CALLBACK] CRM integration failed:', crmResult.error);
-        // Still return success for UAE Pass, but without CRM URL
-        return {
-          success: true,
-          user: normalizedProfile,
-          error: `CRM integration failed: ${crmResult.error}`,
-        };
-      }
-    } catch (crmError) {
-      console.error('[CALLBACK] CRM integration error:', crmError);
-      // Still return success for UAE Pass, but note the CRM error
-      return {
-        success: true,
-        user: normalizedProfile,
-        error: `CRM error: ${crmError instanceof Error ? crmError.message : 'Unknown error'}`,
-      };
-    }
+    // Return user info WITHOUT CRM integration
+    return {
+      success: true,
+      user: normalizedProfile,
+    };
   } catch (error) {
-    console.error('Callback processing error:', error);
+    console.error('UAE PASS authentication error:', error);
 
     // Clean up cookies on error
     try {
@@ -179,6 +139,4 @@ export async function processUAEPassCallback(
     };
   }
 }
-
-
 
