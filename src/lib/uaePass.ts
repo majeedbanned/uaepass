@@ -391,10 +391,11 @@ export function normalizeUserProfile(profile: UAEPassUserProfile): NormalizedUse
     profile.name ||
     '';
 
+  // Emirates ID (idn) - only available for verified accounts (SOP2, SOP3)
+  // Do NOT fall back to 'sub' as that's the UUID, not Emirates ID
   const emiratesId =
     profile.idn ||             // UAE PASS primary field (Emirates ID)
     profile.emiratesId ||      // Alternative naming
-    profile.sub ||
     '';
 
   const mobile =
@@ -424,9 +425,11 @@ export function normalizeUserProfile(profile: UAEPassUserProfile): NormalizedUse
     '';
 
   // Extract UUID from UAE PASS response
+  // In OIDC, 'sub' (subject identifier) is typically the UUID
+  // UAE PASS may also provide 'uuid' field explicitly
   const uuid =
-    profile.uuid ||            // UAE PASS primary field (UUID)
-    profile.userId ||          // Alternative naming
+    profile.uuid ||            // UAE PASS explicit UUID field
+    profile.sub ||             // OIDC subject identifier (usually the UUID)
     undefined;
 
   return {
