@@ -2,14 +2,16 @@
  * Callback Handler Component
  * 
  * Client component that processes the UAE PASS callback
- * by calling a Server Action (which can modify cookies)
+ * First gets user info from UAE PASS, then shows confirmation screen
+ * User clicks button to proceed with CRM integration
  */
 
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { processUAEPassCallback, CallbackResult } from '@/app/actions/uaePassCallback';
+import { processUAEPassAuth, UAEPassAuthResult } from '@/app/actions/uaePassAuth';
+import UserConfirmation from '@/components/UserConfirmation';
+import { NormalizedUserProfile } from '@/lib/uaePass';
 
 interface CallbackHandlerProps {
   code: string;
@@ -17,40 +19,21 @@ interface CallbackHandlerProps {
 }
 
 export default function CallbackHandler({ code, state }: CallbackHandlerProps) {
-  const router = useRouter();
-  const [status, setStatus] = useState<'processing' | 'success' | 'redirecting' | 'error'>('processing');
+  const [status, setStatus] = useState<'processing' | 'confirming' | 'error'>('processing');
   const [error, setError] = useState<string | null>(null);
-  const [isNewUser, setIsNewUser] = useState<boolean>(false);
-  const [crmLoginUrl, setCrmLoginUrl] = useState<string | null>(null);
+  const [user, setUser] = useState<NormalizedUserProfile | null>(null);
 
   useEffect(() => {
     async function processCallback() {
       try {
-        console.log('[UI] Processing callback...');
-        const result: CallbackResult = await processUAEPassCallback(code, state);
-        console.log('[UI] Callback result:', result);
+        console.log('[UI] Processing UAE PASS callback...');
+        const result: UAEPassAuthResult = await processUAEPassAuth(code, state);
+        console.log('[UI] UAE PASS auth result:', result);
 
-        if (result.success) {
-          // Check if we have a CRM login URL
-          if (result.crmLoginUrl) {
-            console.log('[UI] CRM login URL received, redirecting to CRM...');
-            setIsNewUser(result.isNewCRMUser || false);
-            setCrmLoginUrl(result.crmLoginUrl);
-            setStatus('redirecting');
-            
-            // Redirect to CRM login URL after short delay
-            setTimeout(() => {
-              console.log('[UI] Redirecting to:', result.crmLoginUrl);
-              window.location.href = result.crmLoginUrl!;
-            }, 1500);
-          } else {
-            // No CRM URL, fallback to profile page
-            console.log('[UI] No CRM URL, redirecting to profile...');
-            setStatus('success');
-            setTimeout(() => {
-              router.push('/uae-pass/profile');
-            }, 1000);
-          }
+        if (result.success && result.user) {
+          console.log('[UI] User info received, showing confirmation screen');
+          setUser(result.user);
+          setStatus('confirming');
         } else {
           setStatus('error');
           setError(result.error || 'Authentication failed');
@@ -63,7 +46,7 @@ export default function CallbackHandler({ code, state }: CallbackHandlerProps) {
     }
 
     processCallback();
-  }, [code, state, router]);
+  }, [code, state]);
 
   if (status === 'processing') {
     return (
@@ -103,75 +86,8 @@ export default function CallbackHandler({ code, state }: CallbackHandlerProps) {
     );
   }
 
-  if (status === 'redirecting') {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-green-50 to-emerald-100 dark:from-gray-900 dark:to-gray-800">
-        <div className="w-full max-w-md space-y-4 rounded-2xl bg-white p-8 shadow-xl dark:bg-gray-800">
-          <div className="text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/20">
-              <svg
-                className="h-6 w-6 text-green-600 dark:text-green-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-            </div>
-            <h1 className="mt-4 text-2xl font-bold text-gray-900 dark:text-white">
-              {isNewUser ? 'Account Created!' : 'Welcome Back!'}
-            </h1>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              {isNewUser 
-                ? 'Your account has been created. Redirecting to CMS Financial...'
-                : 'Redirecting to CMS Financial...'}
-            </p>
-            <div className="mt-4">
-              <div className="mx-auto h-1 w-32 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-                <div className="h-full w-full origin-left animate-pulse bg-green-500"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (status === 'success') {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-green-50 to-emerald-100 dark:from-gray-900 dark:to-gray-800">
-        <div className="w-full max-w-md space-y-4 rounded-2xl bg-white p-8 shadow-xl dark:bg-gray-800">
-          <div className="text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/20">
-              <svg
-                className="h-6 w-6 text-green-600 dark:text-green-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-            </div>
-            <h1 className="mt-4 text-2xl font-bold text-gray-900 dark:text-white">
-              Authentication Successful!
-            </h1>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Redirecting to your profile...
-            </p>
-          </div>
-        </div>
-      </div>
-    );
+  if (status === 'confirming' && user) {
+    return <UserConfirmation user={user} />;
   }
 
   // Error state
