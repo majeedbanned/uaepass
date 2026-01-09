@@ -265,10 +265,19 @@ export default function UserConfirmation({ user }: UserConfirmationProps) {
                 </div>
               )}
 
+              {user.uuid && (
+                <div>
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">UUID</dt>
+                  <dd className="mt-1 text-sm font-mono text-gray-600 dark:text-gray-400 break-all">
+                    {user.uuid}
+                  </dd>
+                </div>
+              )}
+
               {user.sub && (
                 <div>
-                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">User ID</dt>
-                  <dd className="mt-1 text-sm font-mono text-gray-600 dark:text-gray-400">
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">User ID (Sub)</dt>
+                  <dd className="mt-1 text-sm font-mono text-gray-600 dark:text-gray-400 break-all">
                     {user.sub}
                   </dd>
                 </div>

@@ -33,6 +33,7 @@ export interface TokenResponse {
 // User Profile from UAE PASS UserInfo endpoint
 export interface UAEPassUserProfile {
   sub: string; // Subject identifier
+  uuid?: string; // User unique ID (UUID format) - UAE PASS specific field
   fullName?: string;
   firstName?: string;
   lastName?: string;
@@ -55,7 +56,8 @@ export interface NormalizedUserProfile {
   email: string;
   dateOfBirth?: string;
   nationality?: string;
-  sub: string;
+  sub: string; // OIDC subject identifier
+  uuid?: string; // UAE PASS user unique ID (UUID format)
 }
 
 // PKCE Code Challenge and Verifier
@@ -421,6 +423,12 @@ export function normalizeUserProfile(profile: UAEPassUserProfile): NormalizedUse
     profile.country ||
     '';
 
+  // Extract UUID from UAE PASS response
+  const uuid =
+    profile.uuid ||            // UAE PASS primary field (UUID)
+    profile.userId ||          // Alternative naming
+    undefined;
+
   return {
     fullName: fullName || 'N/A',
     firstName: firstName || 'N/A',
@@ -431,6 +439,7 @@ export function normalizeUserProfile(profile: UAEPassUserProfile): NormalizedUse
     dateOfBirth: dateOfBirth || undefined,
     nationality: nationality || undefined,
     sub: profile.sub,
+    uuid: uuid,
   };
 }
 
