@@ -26,12 +26,12 @@ export default async function Home() {
               >
                 View Profile
               </Link>
-        </div>
+            </div>
           ) : (
             <Link
               href="/uae-pass/login"
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-6 py-3 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
-          >
+            >
               <svg
                 className="w-5 h-5"
                 fill="none"
