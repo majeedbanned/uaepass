@@ -16,7 +16,7 @@ interface UserConfirmationProps {
 }
 
 export default function UserConfirmation({ user }: UserConfirmationProps) {
-  const [status, setStatus] = useState<'confirming' | 'processing' | 'redirecting' | 'error' | 'sop_error'>('confirming');
+  const [status, setStatus] = useState<'confirming' | 'processing' | 'redirecting' | 'error' | 'sop_error' | 'registration_error'>('confirming');
   const [error, setError] = useState<string | null>(null);
   const [crmLoginUrl, setCrmLoginUrl] = useState<string | null>(null);
   const [isNewUser, setIsNewUser] = useState<boolean>(false);
@@ -41,6 +41,8 @@ export default function UserConfirmation({ user }: UserConfirmationProps) {
         // Handle different error types
         if (result.errorType === 'SOP_LEVEL') {
           setStatus('sop_error');
+        } else if (result.errorType === 'REGISTRATION_ERROR') {
+          setStatus('registration_error');
         } else {
           setStatus('error');
         }
@@ -192,6 +194,72 @@ export default function UserConfirmation({ user }: UserConfirmationProps) {
                   className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors"
                 >
                   Try Again with Different Account
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Registration Error - Phone/Email already registered or other registration issues
+  if (status === 'registration_error') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-orange-50 to-red-100 dark:from-gray-900 dark:to-gray-800">
+        <div className="w-full max-w-lg space-y-4 rounded-2xl bg-white p-8 shadow-xl dark:bg-gray-800">
+          <div className="text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/20">
+              <svg
+                className="h-8 w-8 text-orange-600 dark:text-orange-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </div>
+            <h1 className="mt-4 text-2xl font-bold text-gray-900 dark:text-white">
+              Registration Issue
+            </h1>
+            <div className="mt-4 rounded-lg bg-orange-50 dark:bg-orange-900/10 p-4 text-left">
+              <p className="text-sm text-orange-800 dark:text-orange-200">
+                {error}
+              </p>
+            </div>
+            
+            <div className="mt-6 space-y-4">
+              <div className="rounded-lg bg-blue-50 dark:bg-blue-900/10 p-4 text-left">
+                <h3 className="font-medium text-blue-800 dark:text-blue-200 mb-2">
+                  What you can do:
+                </h3>
+                <ul className="text-sm text-blue-700 dark:text-blue-300 list-disc list-inside space-y-1">
+                  <li>If you already have an account, please contact our support team</li>
+                  <li>We can help link your UAE PASS to your existing account</li>
+                  <li>Or you can try with a different UAE PASS account</li>
+                </ul>
+              </div>
+              
+              <div className="flex flex-col gap-3">
+                <a
+                  href="mailto:support@cmsfinancial.ae?subject=UAE PASS Registration Issue&body=Hello,%0A%0AI encountered an issue while trying to register with UAE PASS.%0A%0ADetails:%0AEmail: ${encodeURIComponent(user.email)}%0AMobile: ${encodeURIComponent(user.mobile)}%0AName: ${encodeURIComponent(user.fullName)}%0A%0AError: ${encodeURIComponent(error || 'Registration failed')}%0A%0APlease help me resolve this issue.%0A%0AThank you."
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  Contact Support
+                </a>
+                <a
+                  href="/uae-pass/login"
+                  className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors"
+                >
+                  Try with Different Account
                 </a>
               </div>
             </div>

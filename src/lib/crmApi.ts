@@ -45,6 +45,7 @@ export interface RegistrationRequest {
   country: string;
   emailVerified: boolean;
   phoneVerified: boolean;
+  nationality?: string;
 }
 
 // Emirates ID Custom Fields for CRM
@@ -61,6 +62,196 @@ export interface EmiratesIdCustomFields {
 export interface UserUpdateRequest {
   user: number;
   customFields: EmiratesIdCustomFields;
+}
+
+// CRM Error Response structure
+export interface CRMErrorResponse {
+  code: number;
+  message: string;
+  errors?: {
+    children?: Record<string, { errors?: string[] } | any>;
+  };
+}
+
+/**
+ * ISO 3166-1 alpha-3 to alpha-2 country code mapping
+ * Common codes used in UAE PASS
+ */
+const ISO_ALPHA3_TO_ALPHA2: Record<string, string> = {
+  // Common nationalities in UAE
+  'ARE': 'AE', // United Arab Emirates
+  'SAU': 'SA', // Saudi Arabia
+  'IND': 'IN', // India
+  'PAK': 'PK', // Pakistan
+  'BGD': 'BD', // Bangladesh
+  'PHL': 'PH', // Philippines
+  'EGY': 'EG', // Egypt
+  'JOR': 'JO', // Jordan
+  'LBN': 'LB', // Lebanon
+  'SYR': 'SY', // Syria
+  'IRN': 'IR', // Iran
+  'IRQ': 'IQ', // Iraq
+  'GBR': 'GB', // United Kingdom
+  'USA': 'US', // United States
+  'CAN': 'CA', // Canada
+  'AUS': 'AU', // Australia
+  'DEU': 'DE', // Germany
+  'FRA': 'FR', // France
+  'ITA': 'IT', // Italy
+  'ESP': 'ES', // Spain
+  'NLD': 'NL', // Netherlands
+  'CHE': 'CH', // Switzerland
+  'RUS': 'RU', // Russia
+  'CHN': 'CN', // China
+  'JPN': 'JP', // Japan
+  'KOR': 'KR', // South Korea
+  'IDN': 'ID', // Indonesia
+  'MYS': 'MY', // Malaysia
+  'SGP': 'SG', // Singapore
+  'THA': 'TH', // Thailand
+  'VNM': 'VN', // Vietnam
+  'NPL': 'NP', // Nepal
+  'LKA': 'LK', // Sri Lanka
+  'KWT': 'KW', // Kuwait
+  'BHR': 'BH', // Bahrain
+  'QAT': 'QA', // Qatar
+  'OMN': 'OM', // Oman
+  'YEM': 'YE', // Yemen
+  'MAR': 'MA', // Morocco
+  'DZA': 'DZ', // Algeria
+  'TUN': 'TN', // Tunisia
+  'SDN': 'SD', // Sudan
+  'NGA': 'NG', // Nigeria
+  'KEN': 'KE', // Kenya
+  'ZAF': 'ZA', // South Africa
+  'BRA': 'BR', // Brazil
+  'MEX': 'MX', // Mexico
+  'ARG': 'AR', // Argentina
+  'COL': 'CO', // Colombia
+  'CYP': 'CY', // Cyprus
+  'TUR': 'TR', // Turkey
+  'GRC': 'GR', // Greece
+  'POL': 'PL', // Poland
+  'UKR': 'UA', // Ukraine
+  'AFG': 'AF', // Afghanistan
+  'MMR': 'MM', // Myanmar
+  'ETH': 'ET', // Ethiopia
+  'UGA': 'UG', // Uganda
+  'TZA': 'TZ', // Tanzania
+  'GHA': 'GH', // Ghana
+  'CMR': 'CM', // Cameroon
+  'SEN': 'SN', // Senegal
+  'NZL': 'NZ', // New Zealand
+  'IRL': 'IE', // Ireland
+  'PRT': 'PT', // Portugal
+  'SWE': 'SE', // Sweden
+  'NOR': 'NO', // Norway
+  'DNK': 'DK', // Denmark
+  'FIN': 'FI', // Finland
+  'AUT': 'AT', // Austria
+  'BEL': 'BE', // Belgium
+  'CZE': 'CZ', // Czech Republic
+  'HUN': 'HU', // Hungary
+  'ROU': 'RO', // Romania
+  'SRB': 'RS', // Serbia
+  'HRV': 'HR', // Croatia
+  'BGR': 'BG', // Bulgaria
+  'PSE': 'PS', // Palestine
+};
+
+/**
+ * Convert ISO 3166-1 alpha-3 country code to alpha-2
+ * Returns the input if already 2 characters or not found in mapping
+ */
+export function convertCountryCodeToAlpha2(countryCode: string | undefined): string {
+  if (!countryCode) return 'CY'; // Default to Cyprus
+  
+  const code = countryCode.toUpperCase().trim();
+  
+  // Already 2-letter code
+  if (code.length === 2) return code;
+  
+  // Convert 3-letter to 2-letter
+  if (code.length === 3 && ISO_ALPHA3_TO_ALPHA2[code]) {
+    return ISO_ALPHA3_TO_ALPHA2[code];
+  }
+  
+  // Return default if not found
+  console.log(`[CRM] Unknown country code: ${code}, using default CY`);
+  return 'CY';
+}
+
+/**
+ * Parse CRM error response and extract friendly error messages
+ */
+export function parseCRMErrorResponse(responseText: string): string {
+  try {
+    const errorData: CRMErrorResponse = JSON.parse(responseText);
+    
+    // Check for validation errors
+    if (errorData.errors?.children) {
+      const errorMessages: string[] = [];
+      
+      // Iterate through all fields to find errors
+      for (const [field, value] of Object.entries(errorData.errors.children)) {
+        if (value && typeof value === 'object' && 'errors' in value && Array.isArray(value.errors)) {
+          for (const errorMsg of value.errors) {
+            // Create user-friendly error messages
+            const friendlyMessage = getFriendlyErrorMessage(field, errorMsg);
+            errorMessages.push(friendlyMessage);
+          }
+        }
+      }
+      
+      if (errorMessages.length > 0) {
+        return errorMessages.join(' ');
+      }
+    }
+    
+    // Return the general message if no specific errors found
+    return errorData.message || 'Registration failed. Please try again.';
+  } catch (e) {
+    // If parsing fails, return a generic message
+    return 'Registration failed. Please try again or contact support.';
+  }
+}
+
+/**
+ * Convert CRM field names and error messages to user-friendly messages
+ */
+function getFriendlyErrorMessage(field: string, errorMessage: string): string {
+  const fieldNames: Record<string, string> = {
+    'phone': 'phone number',
+    'email': 'email address',
+    'firstName': 'first name',
+    'lastName': 'last name',
+    'country': 'country',
+    'password': 'password',
+  };
+  
+  const friendlyField = fieldNames[field] || field;
+  
+  // Handle common error patterns
+  if (errorMessage.toLowerCase().includes('already registered')) {
+    if (field === 'phone') {
+      return 'This phone number is already registered in our system. If you already have an account, please contact support for assistance.';
+    }
+    if (field === 'email') {
+      return 'This email address is already registered in our system. If you already have an account, please contact support for assistance.';
+    }
+    return `This ${friendlyField} is already registered in our system.`;
+  }
+  
+  if (errorMessage.toLowerCase().includes('invalid')) {
+    return `The ${friendlyField} provided is invalid. Please check and try again.`;
+  }
+  
+  if (errorMessage.toLowerCase().includes('required')) {
+    return `${friendlyField.charAt(0).toUpperCase() + friendlyField.slice(1)} is required.`;
+  }
+  
+  // Return original message with field context
+  return `${friendlyField.charAt(0).toUpperCase() + friendlyField.slice(1)}: ${errorMessage}`;
 }
 
 /**
@@ -131,6 +322,48 @@ export async function findUserByEmail(email: string): Promise<CRMUser | null> {
     return null;
   } catch (error) {
     console.error('[CRM] Error finding user by email:', error);
+    return null;
+  }
+}
+
+/**
+ * Find user by phone in CRM
+ */
+export async function findUserByPhone(phone: string): Promise<CRMUser | null> {
+  const config = getCRMConfig();
+  const url = `${config.baseUrl}/rest/users?version=${config.apiVersion}`;
+
+  // Ensure phone number has + prefix
+  const phoneNumber = phone.startsWith('+') ? phone : `+${phone}`;
+
+  console.log('[CRM] Finding user by phone:', phoneNumber);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${config.apiToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ phone: phoneNumber }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[CRM] Find user by phone error:', errorText);
+      return null;
+    }
+
+    const data = await response.json();
+    if (Array.isArray(data) && data.length > 0) {
+      console.log('[CRM] User found by phone with ID:', data[0].id);
+      return data[0] as CRMUser;
+    }
+
+    return null;
+  } catch (error) {
+    console.error('[CRM] Error finding user by phone:', error);
     return null;
   }
 }
@@ -265,7 +498,7 @@ export async function findUserByEmiratesId(emiratesId: string): Promise<CRMUser 
 }
 
 /**
- * Find existing user by any identifier (email, UUID, Emirates ID, or custom fields)
+ * Find existing user by any identifier (email, phone, UUID, Emirates ID, or custom fields)
  * Returns the first match found
  */
 export async function findExistingUser(uaePassUser: NormalizedUserProfile): Promise<CRMUser | null> {
@@ -304,6 +537,15 @@ export async function findExistingUser(uaePassUser: NormalizedUserProfile): Prom
     if (userByEmiratesId) {
       console.log('[CRM] Found user by Emirates ID');
       return userByEmiratesId;
+    }
+  }
+
+  // Search by phone number
+  if (uaePassUser.mobile && uaePassUser.mobile !== 'N/A') {
+    const userByPhone = await findUserByPhone(uaePassUser.mobile);
+    if (userByPhone) {
+      console.log('[CRM] Found user by phone number');
+      return userByPhone;
     }
   }
 
@@ -361,7 +603,9 @@ export async function updateUserEmiratesIdDetails(
     if (!response.ok) {
       const errorText = await response.text();
       console.error('[CRM] Update user error response:', errorText);
-      throw new Error(`CRM update failed: ${response.status} ${response.statusText} - ${errorText}`);
+      // Don't throw for update failures, just log and continue
+      console.warn('[CRM] Failed to update Emirates ID details, but continuing...');
+      return false;
     }
 
     const data = await response.json();
@@ -369,7 +613,8 @@ export async function updateUserEmiratesIdDetails(
     return true;
   } catch (error) {
     console.error('[CRM] Error updating user Emirates ID details:', error);
-    throw error;
+    // Don't throw for update failures
+    return false;
   }
 }
 
@@ -382,6 +627,7 @@ export async function registerUser(userData: {
   email: string;
   phone: string;
   country?: string;
+  nationality?: string;
 }): Promise<CRMUser> {
   const config = getCRMConfig();
   const url = `${config.baseUrl}/rest/users/new?version=${config.apiVersion}`;
@@ -390,6 +636,9 @@ export async function registerUser(userData: {
   const phoneNumber = userData.phone.startsWith('+') 
     ? userData.phone 
     : `+${userData.phone}`;
+
+  // Convert nationality to 2-letter ISO code
+  const nationalityCode = convertCountryCodeToAlpha2(userData.nationality);
 
   const registrationData: RegistrationRequest = {
     firstName: userData.firstName,
@@ -400,6 +649,7 @@ export async function registerUser(userData: {
     password: generateRandomPassword(),
     sendWelcomeEmail: true,
     country: userData.country || 'CY', // Default to Cyprus as specified
+    nationality: nationalityCode, // 2-letter ISO country code
     emailVerified: true,
     phoneVerified: true,
   };
@@ -426,7 +676,9 @@ export async function registerUser(userData: {
     console.log('[CRM] Register user response body:', responseText);
 
     if (!response.ok) {
-      throw new Error(`CRM registration failed: ${response.status} ${response.statusText} - ${responseText}`);
+      // Parse the error response to get friendly error message
+      const friendlyError = parseCRMErrorResponse(responseText);
+      throw new Error(friendlyError);
     }
 
     const data = JSON.parse(responseText);
@@ -527,7 +779,7 @@ export async function handleCRMAuth(uaePassUser: NormalizedUserProfile): Promise
   isNewUser: boolean;
   crmUserId?: number;
   error?: string;
-  errorType?: 'SOP_LEVEL' | 'CRM_ERROR' | 'UNKNOWN';
+  errorType?: 'SOP_LEVEL' | 'CRM_ERROR' | 'REGISTRATION_ERROR' | 'UNKNOWN';
 }> {
   console.log('========================================');
   console.log('[CRM] Starting CRM authentication flow');
@@ -559,15 +811,25 @@ export async function handleCRMAuth(uaePassUser: NormalizedUserProfile): Promise
       console.log('[CRM] Step 3: User not found, registering new user...');
       isNewUser = true;
 
-      crmUser = await registerUser({
-        firstName: uaePassUser.firstName !== 'N/A' ? uaePassUser.firstName : 'User',
-        lastName: uaePassUser.lastName !== 'N/A' ? uaePassUser.lastName : 'Account',
-        email: uaePassUser.email !== 'N/A' ? uaePassUser.email : `user_${Date.now()}@uaepass.ae`,
-        phone: uaePassUser.mobile !== 'N/A' ? uaePassUser.mobile : '+971500000000',
-        country: 'CY', // Default country as specified
-      });
-
-      console.log('[CRM] New user registered with ID:', crmUser.id);
+      try {
+        crmUser = await registerUser({
+          firstName: uaePassUser.firstName !== 'N/A' ? uaePassUser.firstName : 'User',
+          lastName: uaePassUser.lastName !== 'N/A' ? uaePassUser.lastName : 'Account',
+          email: uaePassUser.email !== 'N/A' ? uaePassUser.email : `user_${Date.now()}@uaepass.ae`,
+          phone: uaePassUser.mobile !== 'N/A' ? uaePassUser.mobile : '+971500000000',
+          country: 'CY', // Default country as specified
+          nationality: uaePassUser.nationality, // Will be converted to 2-letter code
+        });
+        console.log('[CRM] New user registered with ID:', crmUser.id);
+      } catch (regError) {
+        console.error('[CRM] Registration failed:', regError);
+        return {
+          success: false,
+          isNewUser: true,
+          error: regError instanceof Error ? regError.message : 'Registration failed. Please try again.',
+          errorType: 'REGISTRATION_ERROR',
+        };
+      }
     } else {
       console.log('[CRM] Step 3: Existing user found with ID:', crmUser.id);
     }
