@@ -8,7 +8,7 @@
 'use server';
 
 import { cookies } from 'next/headers';
-import { SignJWT, jwtVerify } from 'jose';
+import { jwtVerify } from 'jose';
 import { NormalizedUserProfile } from '@/lib/uaePass';
 import { handleCRMAuth } from '@/lib/crmApi';
 
@@ -22,6 +22,7 @@ function getSessionSecret(): Uint8Array {
 export interface CRMIntegrationResult {
   success: boolean;
   error?: string;
+  errorType?: 'SOP_LEVEL' | 'CRM_ERROR' | 'SESSION_ERROR' | 'UNKNOWN';
   crmLoginUrl?: string;
   isNewCRMUser?: boolean;
 }
@@ -36,7 +37,11 @@ export async function processCRMIntegration(): Promise<CRMIntegrationResult> {
     // Get user from session
     const sessionToken = cookieStore.get(SESSION_COOKIE_NAME)?.value;
     if (!sessionToken) {
-      return { success: false, error: 'No active session. Please log in again.' };
+      return { 
+        success: false, 
+        error: 'No active session. Please log in again.',
+        errorType: 'SESSION_ERROR',
+      };
     }
 
     // Decode session to get user info
@@ -45,26 +50,35 @@ export async function processCRMIntegration(): Promise<CRMIntegrationResult> {
       const { payload } = await jwtVerify(sessionToken, getSessionSecret());
       sessionData = payload;
     } catch (error) {
-      return { success: false, error: 'Invalid session. Please log in again.' };
+      return { 
+        success: false, 
+        error: 'Invalid session. Please log in again.',
+        errorType: 'SESSION_ERROR',
+      };
     }
 
     const user: NormalizedUserProfile = sessionData.user;
     if (!user) {
-      return { success: false, error: 'User information not found in session.' };
+      return { 
+        success: false, 
+        error: 'User information not found in session.',
+        errorType: 'SESSION_ERROR',
+      };
     }
 
     console.log('========================================');
     console.log('[CRM INTEGRATION] Starting CRM integration...');
     console.log('[CRM INTEGRATION] User:', user.email);
+    console.log('[CRM INTEGRATION] Emirates ID:', user.emiratesId);
+    console.log('[CRM INTEGRATION] UUID:', user.uuid);
     console.log('========================================');
 
-    // Process CRM authentication
+    // Process CRM authentication (includes SOP validation)
     const crmResult = await handleCRMAuth(user);
 
     if (crmResult.success && crmResult.loginUrl) {
       console.log('[CRM INTEGRATION] CRM integration successful');
       console.log('[CRM INTEGRATION] Is new CRM user:', crmResult.isNewUser);
-      console.log('[CRM INTEGRATION] CRM Login URL:', crmResult.loginUrl);
 
       return {
         success: true,
@@ -73,9 +87,12 @@ export async function processCRMIntegration(): Promise<CRMIntegrationResult> {
       };
     } else {
       console.error('[CRM INTEGRATION] CRM integration failed:', crmResult.error);
+      console.error('[CRM INTEGRATION] Error type:', crmResult.errorType);
+      
       return {
         success: false,
         error: crmResult.error || 'CRM integration failed',
+        errorType: crmResult.errorType || 'UNKNOWN',
       };
     }
   } catch (error) {
@@ -83,6 +100,7 @@ export async function processCRMIntegration(): Promise<CRMIntegrationResult> {
     return {
       success: false,
       error: error instanceof Error ? error.message : 'CRM integration failed',
+      errorType: 'UNKNOWN',
     };
   }
 }

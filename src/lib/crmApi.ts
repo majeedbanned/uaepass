@@ -1,7 +1,8 @@
 /**
  * FXBackoffice CRM API Integration
  * 
- * Handles user lookup, registration, and direct login with the CRM system
+ * Handles user lookup, registration, update, and direct login with the CRM system
+ * Updated to support Emirates ID verification and custom fields
  */
 
 import { NormalizedUserProfile } from './uaePass';
@@ -23,6 +24,7 @@ export interface CRMUser {
   country: string;
   enabled: boolean;
   verified: boolean;
+  customFields?: Record<string, any>;
   [key: string]: any; // Allow additional fields
 }
 
@@ -45,11 +47,20 @@ export interface RegistrationRequest {
   phoneVerified: boolean;
 }
 
-// Registration Response
-export interface RegistrationResponse {
-  id: number;
-  email: string;
-  [key: string]: any;
+// Emirates ID Custom Fields for CRM
+export interface EmiratesIdCustomFields {
+  custom_client_emirate_id?: string;
+  custom_client_emirateid_nationality?: string;
+  custom_client_emirateid_email?: string;
+  custom_client_emirateid_mobile?: string;
+  custom_client_emirateid_fullname?: string;
+  custom_client_emirateid_uuid?: string;
+}
+
+// User Update Request
+export interface UserUpdateRequest {
+  user: number;
+  customFields: EmiratesIdCustomFields;
 }
 
 /**
@@ -87,14 +98,12 @@ function generateRandomPassword(length: number = 16): string {
 
 /**
  * Find user by email in CRM
- * Returns the user if found, null if not found
  */
 export async function findUserByEmail(email: string): Promise<CRMUser | null> {
   const config = getCRMConfig();
   const url = `${config.baseUrl}/rest/users?version=${config.apiVersion}`;
 
   console.log('[CRM] Finding user by email:', email);
-  console.log('[CRM] Request URL:', url);
 
   try {
     const response = await fetch(url, {
@@ -107,27 +116,259 @@ export async function findUserByEmail(email: string): Promise<CRMUser | null> {
       body: JSON.stringify({ email }),
     });
 
-    console.log('[CRM] Find user response status:', response.status, response.statusText);
-
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[CRM] Find user error response:', errorText);
-      throw new Error(`CRM API error: ${response.status} ${response.statusText}`);
+      console.error('[CRM] Find user by email error:', errorText);
+      return null; // Return null instead of throwing for search failures
     }
 
     const data = await response.json();
-    console.log('[CRM] Find user response:', JSON.stringify(data, null, 2));
-
-    // API returns an array - check if user exists
     if (Array.isArray(data) && data.length > 0) {
-      console.log('[CRM] User found with ID:', data[0].id);
+      console.log('[CRM] User found by email with ID:', data[0].id);
       return data[0] as CRMUser;
     }
 
-    console.log('[CRM] User not found in CRM');
     return null;
   } catch (error) {
-    console.error('[CRM] Error finding user:', error);
+    console.error('[CRM] Error finding user by email:', error);
+    return null;
+  }
+}
+
+/**
+ * Find user by custom field (Emirates ID email)
+ */
+export async function findUserByEmiratesIdEmail(email: string): Promise<CRMUser | null> {
+  const config = getCRMConfig();
+  const url = `${config.baseUrl}/rest/users?version=${config.apiVersion}`;
+
+  console.log('[CRM] Finding user by Emirates ID email:', email);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${config.apiToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        customFields: {
+          custom_client_emirateid_email: email,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[CRM] Find user by Emirates ID email error:', errorText);
+      return null;
+    }
+
+    const data = await response.json();
+    if (Array.isArray(data) && data.length > 0) {
+      console.log('[CRM] User found by Emirates ID email with ID:', data[0].id);
+      return data[0] as CRMUser;
+    }
+
+    return null;
+  } catch (error) {
+    console.error('[CRM] Error finding user by Emirates ID email:', error);
+    return null;
+  }
+}
+
+/**
+ * Find user by custom field (Emirates ID UUID)
+ */
+export async function findUserByEmiratesIdUuid(uuid: string): Promise<CRMUser | null> {
+  const config = getCRMConfig();
+  const url = `${config.baseUrl}/rest/users?version=${config.apiVersion}`;
+
+  console.log('[CRM] Finding user by Emirates ID UUID:', uuid);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${config.apiToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        customFields: {
+          custom_client_emirateid_uuid: uuid,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[CRM] Find user by Emirates ID UUID error:', errorText);
+      return null;
+    }
+
+    const data = await response.json();
+    if (Array.isArray(data) && data.length > 0) {
+      console.log('[CRM] User found by Emirates ID UUID with ID:', data[0].id);
+      return data[0] as CRMUser;
+    }
+
+    return null;
+  } catch (error) {
+    console.error('[CRM] Error finding user by Emirates ID UUID:', error);
+    return null;
+  }
+}
+
+/**
+ * Find user by custom field (Emirates ID number)
+ */
+export async function findUserByEmiratesId(emiratesId: string): Promise<CRMUser | null> {
+  const config = getCRMConfig();
+  const url = `${config.baseUrl}/rest/users?version=${config.apiVersion}`;
+
+  console.log('[CRM] Finding user by Emirates ID:', emiratesId);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${config.apiToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        customFields: {
+          custom_client_emirate_id: emiratesId,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[CRM] Find user by Emirates ID error:', errorText);
+      return null;
+    }
+
+    const data = await response.json();
+    if (Array.isArray(data) && data.length > 0) {
+      console.log('[CRM] User found by Emirates ID with ID:', data[0].id);
+      return data[0] as CRMUser;
+    }
+
+    return null;
+  } catch (error) {
+    console.error('[CRM] Error finding user by Emirates ID:', error);
+    return null;
+  }
+}
+
+/**
+ * Find existing user by any identifier (email, UUID, Emirates ID, or custom fields)
+ * Returns the first match found
+ */
+export async function findExistingUser(uaePassUser: NormalizedUserProfile): Promise<CRMUser | null> {
+  console.log('[CRM] Searching for existing user by multiple identifiers...');
+
+  // Search by Emirates ID email custom field
+  if (uaePassUser.email && uaePassUser.email !== 'N/A') {
+    const userByEmiratesEmail = await findUserByEmiratesIdEmail(uaePassUser.email);
+    if (userByEmiratesEmail) {
+      console.log('[CRM] Found user by Emirates ID email');
+      return userByEmiratesEmail;
+    }
+  }
+
+  // Search by Emirates ID UUID custom field
+  if (uaePassUser.uuid) {
+    const userByUuid = await findUserByEmiratesIdUuid(uaePassUser.uuid);
+    if (userByUuid) {
+      console.log('[CRM] Found user by Emirates ID UUID');
+      return userByUuid;
+    }
+  }
+
+  // Search by regular email
+  if (uaePassUser.email && uaePassUser.email !== 'N/A') {
+    const userByEmail = await findUserByEmail(uaePassUser.email);
+    if (userByEmail) {
+      console.log('[CRM] Found user by email');
+      return userByEmail;
+    }
+  }
+
+  // Search by Emirates ID number custom field
+  if (uaePassUser.emiratesId && uaePassUser.emiratesId !== 'N/A') {
+    const userByEmiratesId = await findUserByEmiratesId(uaePassUser.emiratesId);
+    if (userByEmiratesId) {
+      console.log('[CRM] Found user by Emirates ID');
+      return userByEmiratesId;
+    }
+  }
+
+  console.log('[CRM] No existing user found');
+  return null;
+}
+
+/**
+ * Update user's Emirates ID details in CRM
+ */
+export async function updateUserEmiratesIdDetails(
+  userId: number,
+  uaePassUser: NormalizedUserProfile
+): Promise<boolean> {
+  const config = getCRMConfig();
+  const url = `${config.baseUrl}/rest/users/update?version=${config.apiVersion}`;
+
+  const customFields: EmiratesIdCustomFields = {
+    custom_client_emirateid_uuid: uaePassUser.uuid || '',
+    custom_client_emirateid_email: uaePassUser.email !== 'N/A' ? uaePassUser.email : '',
+    custom_client_emirateid_fullname: uaePassUser.fullName !== 'N/A' ? uaePassUser.fullName : '',
+    custom_client_emirateid_mobile: uaePassUser.mobile !== 'N/A' ? uaePassUser.mobile : '',
+  };
+
+  // Only add Emirates ID if available (SOP2/SOP3)
+  if (uaePassUser.emiratesId && uaePassUser.emiratesId !== 'N/A') {
+    customFields.custom_client_emirate_id = uaePassUser.emiratesId;
+  }
+
+  // Only add nationality if available
+  if (uaePassUser.nationality) {
+    customFields.custom_client_emirateid_nationality = uaePassUser.nationality;
+  }
+
+  const updateRequest: UserUpdateRequest = {
+    user: userId,
+    customFields,
+  };
+
+  console.log('[CRM] Updating user Emirates ID details:', JSON.stringify(updateRequest, null, 2));
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${config.apiToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updateRequest),
+    });
+
+    console.log('[CRM] Update user response status:', response.status, response.statusText);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[CRM] Update user error response:', errorText);
+      throw new Error(`CRM update failed: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log('[CRM] User Emirates ID details updated successfully');
+    return true;
+  } catch (error) {
+    console.error('[CRM] Error updating user Emirates ID details:', error);
     throw error;
   }
 }
@@ -167,7 +408,6 @@ export async function registerUser(userData: {
     ...registrationData,
     password: '***HIDDEN***', // Don't log password
   });
-  console.log('[CRM] Request URL:', url);
 
   try {
     const response = await fetch(url, {
@@ -217,13 +457,11 @@ export async function getDirectLoginUrl(
     user: userId,
     locale: options?.locale || 'en',
     redirectUrl: options?.redirectUrl || `${config.baseUrl}/`,
-    logoutUrl: options?.logoutUrl || `${config.baseUrl}/logout`,
+    logoutUrl: options?.logoutUrl || `${config.baseUrl}/login`,
     isClientApi: false,
   };
 
   console.log('[CRM] Getting direct login URL for user ID:', userId);
-  console.log('[CRM] Request URL:', url);
-  console.log('[CRM] Request body:', JSON.stringify(requestBody, null, 2));
 
   try {
     const response = await fetch(url, {
@@ -245,7 +483,7 @@ export async function getDirectLoginUrl(
     }
 
     const data: DirectLoginResponse = await response.json();
-    console.log('[CRM] Direct login URL received:', data.url);
+    console.log('[CRM] Direct login URL received');
 
     return data.url;
   } catch (error) {
@@ -255,13 +493,33 @@ export async function getDirectLoginUrl(
 }
 
 /**
+ * Validate SOP level - Emirates ID is required (SOP2 or SOP3)
+ * Returns error message if validation fails, null if valid
+ */
+export function validateSOPLevel(uaePassUser: NormalizedUserProfile): string | null {
+  // Check if Emirates ID is present (indicates SOP2 or SOP3)
+  if (!uaePassUser.emiratesId || uaePassUser.emiratesId === 'N/A' || uaePassUser.emiratesId === '') {
+    return 'Emirates ID verification required. Your UAE PASS account must be verified (SOP2 or SOP3) to continue. Please upgrade your UAE PASS account and try again.';
+  }
+
+  // Validate Emirates ID format (should be 15 digits, may have dashes)
+  const emiratesIdClean = uaePassUser.emiratesId.replace(/-/g, '');
+  if (!/^\d{15}$/.test(emiratesIdClean)) {
+    return 'Invalid Emirates ID format. Please ensure your UAE PASS account has a valid Emirates ID.';
+  }
+
+  return null; // Valid
+}
+
+/**
  * Main function: Handle CRM login/registration flow after UAE Pass authentication
  * 
  * Flow:
- * 1. Check if user exists in CRM by email
- * 2. If exists: Get direct login URL
- * 3. If not exists: Register user, then get direct login URL
- * 4. Return the direct login URL for redirect
+ * 1. Validate SOP level (require SOP2/SOP3 with Emirates ID)
+ * 2. Check if user exists in CRM by multiple identifiers
+ * 3. If exists: Update Emirates ID details, then get direct login URL
+ * 4. If not exists: Register user, update Emirates ID details, then get direct login URL
+ * 5. Return the direct login URL for redirect
  */
 export async function handleCRMAuth(uaePassUser: NormalizedUserProfile): Promise<{
   success: boolean;
@@ -269,6 +527,7 @@ export async function handleCRMAuth(uaePassUser: NormalizedUserProfile): Promise
   isNewUser: boolean;
   crmUserId?: number;
   error?: string;
+  errorType?: 'SOP_LEVEL' | 'CRM_ERROR' | 'UNKNOWN';
 }> {
   console.log('========================================');
   console.log('[CRM] Starting CRM authentication flow');
@@ -276,38 +535,55 @@ export async function handleCRMAuth(uaePassUser: NormalizedUserProfile): Promise
   console.log('========================================');
 
   try {
-    // Step 1: Check if user exists in CRM
-    console.log('[CRM] Step 1: Checking if user exists in CRM...');
-    let crmUser = await findUserByEmail(uaePassUser.email);
+    // Step 1: Validate SOP level (require Emirates ID)
+    console.log('[CRM] Step 1: Validating SOP level...');
+    const sopError = validateSOPLevel(uaePassUser);
+    if (sopError) {
+      console.log('[CRM] SOP validation failed:', sopError);
+      return {
+        success: false,
+        isNewUser: false,
+        error: sopError,
+        errorType: 'SOP_LEVEL',
+      };
+    }
+    console.log('[CRM] SOP validation passed (SOP2/SOP3 confirmed)');
+
+    // Step 2: Check if user exists in CRM by multiple identifiers
+    console.log('[CRM] Step 2: Checking if user exists in CRM...');
+    let crmUser = await findExistingUser(uaePassUser);
     let isNewUser = false;
 
-    // Step 2: If user doesn't exist, register them
+    // Step 3: If user doesn't exist, register them
     if (!crmUser) {
-      console.log('[CRM] Step 2: User not found, registering new user...');
+      console.log('[CRM] Step 3: User not found, registering new user...');
       isNewUser = true;
 
       crmUser = await registerUser({
         firstName: uaePassUser.firstName !== 'N/A' ? uaePassUser.firstName : 'User',
         lastName: uaePassUser.lastName !== 'N/A' ? uaePassUser.lastName : 'Account',
-        email: uaePassUser.email,
+        email: uaePassUser.email !== 'N/A' ? uaePassUser.email : `user_${Date.now()}@uaepass.ae`,
         phone: uaePassUser.mobile !== 'N/A' ? uaePassUser.mobile : '+971500000000',
         country: 'CY', // Default country as specified
       });
 
       console.log('[CRM] New user registered with ID:', crmUser.id);
     } else {
-      console.log('[CRM] Step 2: Existing user found with ID:', crmUser.id);
+      console.log('[CRM] Step 3: Existing user found with ID:', crmUser.id);
     }
 
-    // Step 3: Get direct login URL
-    console.log('[CRM] Step 3: Getting direct login URL...');
+    // Step 4: Update Emirates ID details in CRM (for both new and existing users)
+    console.log('[CRM] Step 4: Updating Emirates ID details...');
+    await updateUserEmiratesIdDetails(crmUser.id, uaePassUser);
+
+    // Step 5: Get direct login URL
+    console.log('[CRM] Step 5: Getting direct login URL...');
     const loginUrl = await getDirectLoginUrl(crmUser.id);
 
     console.log('========================================');
     console.log('[CRM] CRM authentication flow completed successfully');
     console.log('[CRM] Is new user:', isNewUser);
     console.log('[CRM] CRM User ID:', crmUser.id);
-    console.log('[CRM] Login URL:', loginUrl);
     console.log('========================================');
 
     return {
@@ -326,7 +602,7 @@ export async function handleCRMAuth(uaePassUser: NormalizedUserProfile): Promise
       success: false,
       isNewUser: false,
       error: error instanceof Error ? error.message : 'Unknown CRM error',
+      errorType: 'CRM_ERROR',
     };
   }
 }
-

@@ -2,6 +2,7 @@
  * User Confirmation Component
  * 
  * Displays UAE PASS user information and allows user to confirm before proceeding with CRM integration
+ * Handles SOP level validation errors and other error types
  */
 
 'use client';
@@ -15,7 +16,7 @@ interface UserConfirmationProps {
 }
 
 export default function UserConfirmation({ user }: UserConfirmationProps) {
-  const [status, setStatus] = useState<'confirming' | 'processing' | 'redirecting' | 'error'>('confirming');
+  const [status, setStatus] = useState<'confirming' | 'processing' | 'redirecting' | 'error' | 'sop_error'>('confirming');
   const [error, setError] = useState<string | null>(null);
   const [crmLoginUrl, setCrmLoginUrl] = useState<string | null>(null);
   const [isNewUser, setIsNewUser] = useState<boolean>(false);
@@ -37,7 +38,12 @@ export default function UserConfirmation({ user }: UserConfirmationProps) {
           window.location.href = result.crmLoginUrl!;
         }, 1500);
       } else {
-        setStatus('error');
+        // Handle different error types
+        if (result.errorType === 'SOP_LEVEL') {
+          setStatus('sop_error');
+        } else {
+          setStatus('error');
+        }
         setError(result.error || 'Failed to connect to CRM. Please try again.');
       }
     } catch (err) {
@@ -46,6 +52,7 @@ export default function UserConfirmation({ user }: UserConfirmationProps) {
     }
   }
 
+  // Processing state - loading spinner
   if (status === 'processing') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
@@ -84,6 +91,7 @@ export default function UserConfirmation({ user }: UserConfirmationProps) {
     );
   }
 
+  // Redirecting state - success message
   if (status === 'redirecting') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-green-50 to-emerald-100 dark:from-gray-900 dark:to-gray-800">
@@ -123,6 +131,77 @@ export default function UserConfirmation({ user }: UserConfirmationProps) {
     );
   }
 
+  // SOP Level Error - Emirates ID required
+  if (status === 'sop_error') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-amber-50 to-orange-100 dark:from-gray-900 dark:to-gray-800">
+        <div className="w-full max-w-lg space-y-4 rounded-2xl bg-white p-8 shadow-xl dark:bg-gray-800">
+          <div className="text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/20">
+              <svg
+                className="h-8 w-8 text-amber-600 dark:text-amber-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+            </div>
+            <h1 className="mt-4 text-2xl font-bold text-gray-900 dark:text-white">
+              Verification Required
+            </h1>
+            <div className="mt-4 rounded-lg bg-amber-50 dark:bg-amber-900/10 p-4 text-left">
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                {error}
+              </p>
+            </div>
+            
+            <div className="mt-6 space-y-4">
+              <div className="rounded-lg bg-blue-50 dark:bg-blue-900/10 p-4 text-left">
+                <h3 className="font-medium text-blue-800 dark:text-blue-200 mb-2">
+                  How to upgrade your UAE PASS account:
+                </h3>
+                <ol className="text-sm text-blue-700 dark:text-blue-300 list-decimal list-inside space-y-1">
+                  <li>Open the UAE PASS app on your mobile device</li>
+                  <li>Go to Settings → Account Upgrade</li>
+                  <li>Complete Emirates ID verification</li>
+                  <li>Wait for verification confirmation</li>
+                  <li>Return here and try again</li>
+                </ol>
+              </div>
+              
+              <div className="flex flex-col gap-3">
+                <a
+                  href="https://uaepass.ae"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                  Go to UAE PASS
+                </a>
+                <a
+                  href="/uae-pass/login"
+                  className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors"
+                >
+                  Try Again with Different Account
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // General Error state
   if (status === 'error') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-red-50 dark:bg-gray-900">
@@ -167,6 +246,9 @@ export default function UserConfirmation({ user }: UserConfirmationProps) {
     );
   }
 
+  // Check if Emirates ID is missing (SOP1) - show warning before they click
+  const isSOP1 = !user.emiratesId || user.emiratesId === 'N/A' || user.emiratesId === '';
+
   // Confirmation state - show user info
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 py-12 px-4 sm:px-6 lg:px-8">
@@ -194,6 +276,27 @@ export default function UserConfirmation({ user }: UserConfirmationProps) {
             Please verify your information below and confirm to continue
           </p>
         </div>
+
+        {/* SOP1 Warning Banner */}
+        {isSOP1 && (
+          <div className="mb-6 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                  Emirates ID Not Verified
+                </h3>
+                <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+                  Your UAE PASS account appears to be unverified (SOP1). You need a verified account (SOP2 or SOP3) with Emirates ID to continue. Please upgrade your UAE PASS account first.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="rounded-2xl bg-white shadow-xl dark:bg-gray-800 overflow-hidden">
           <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-8">
@@ -226,8 +329,13 @@ export default function UserConfirmation({ user }: UserConfirmationProps) {
 
               <div>
                 <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Emirates ID</dt>
-                <dd className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
-                  {user.emiratesId}
+                <dd className={`mt-1 text-lg font-semibold ${isSOP1 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-900 dark:text-white'}`}>
+                  {user.emiratesId || 'N/A'}
+                  {isSOP1 && (
+                    <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+                      Required
+                    </span>
+                  )}
                 </dd>
               </div>
 
