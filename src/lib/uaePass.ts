@@ -462,8 +462,25 @@ export function normalizeUserProfile(profile: UAEPassUserProfile): NormalizedUse
     profile.sub ||             // OIDC subject identifier (usually the UUID)
     undefined;
 
-  // Determine user type from ACR value
-  const userType = determineSOPLevel(profile.acr);
+  // Extract user type from various possible field names
+  // UAE PASS may return this in different fields depending on the version/environment
+  const rawUserType = 
+    profile.userType ||           // Primary field name
+    profile.user_type ||          // Snake case variant
+    profile.profileType ||        // Alternative field name
+    profile.profile_type ||       // Snake case variant
+    profile.assuranceLevel ||     // Assurance level
+    profile.assurance_level ||    // Snake case variant
+    profile.sopLevel ||           // Direct SOP level
+    profile.sop_level ||          // Snake case variant
+    undefined;
+
+  // Log available fields for debugging
+  logger.debug('Raw userType value:', rawUserType);
+  logger.debug('Available profile fields:', Object.keys(profile));
+
+  // Determine user type from the extracted value, ACR, or Emirates ID fallback
+  const userType = determineSOPLevel(rawUserType, profile.acr, emiratesId);
 
   return {
     fullName: fullName || 'N/A',
@@ -482,30 +499,56 @@ export function normalizeUserProfile(profile: UAEPassUserProfile): NormalizedUse
 }
 
 /**
- * Determine SOP level from ACR (Authentication Context Class Reference) value
+ * Determine SOP level from userType field, ACR claim, or Emirates ID presence
  * 
- * UAE PASS ACR values:
- * - urn:safelayer:tws:policies:authentication:level:low = SOP1 (Basic/Unverified)
- * - urn:safelayer:tws:policies:authentication:level:substantial = SOP2 (Verified)
- * - urn:safelayer:tws:policies:authentication:level:high = SOP3 (Fully Verified)
+ * UAE PASS may return user type in multiple ways:
+ * 1. Direct userType field: "SOP1", "SOP2", "SOP3"
+ * 2. ACR claim with URN values:
+ *    - urn:safelayer:tws:policies:authentication:level:low = SOP1 (Basic/Unverified)
+ *    - urn:safelayer:tws:policies:authentication:level:substantial = SOP2 (Verified)
+ *    - urn:safelayer:tws:policies:authentication:level:high = SOP3 (Fully Verified)
+ * 3. Inference from Emirates ID presence (fallback)
+ * 
+ * @param userType - Direct userType from userInfo (e.g., "SOP1", "SOP2", "SOP3")
+ * @param acr - ACR claim from ID token
+ * @param emiratesId - Emirates ID for fallback inference (optional)
  */
-export function determineSOPLevel(acr?: string): SOPLevel {
-  if (!acr) {
-    // If no ACR provided, determine by Emirates ID presence (fallback)
-    return 'UNKNOWN';
+export function determineSOPLevel(userType?: string, acr?: string, emiratesId?: string): SOPLevel {
+  // First check if userType is directly provided (most common in UAE PASS)
+  if (userType) {
+    const upperUserType = userType.toUpperCase();
+    if (upperUserType === 'SOP1') return 'SOP1';
+    if (upperUserType === 'SOP2') return 'SOP2';
+    if (upperUserType === 'SOP3') return 'SOP3';
+    
+    // Log for debugging
+    logger.debug('Direct userType value:', userType);
   }
 
-  switch (acr) {
-    case ACR_VALUES.SOP1:
-      return 'SOP1';
-    case ACR_VALUES.SOP2:
-      return 'SOP2';
-    case ACR_VALUES.SOP3:
-      return 'SOP3';
-    default:
-      logger.warn('Unknown ACR value:', acr);
-      return 'UNKNOWN';
+  // Fall back to ACR claim
+  if (acr) {
+    switch (acr) {
+      case ACR_VALUES.SOP1:
+        return 'SOP1';
+      case ACR_VALUES.SOP2:
+        return 'SOP2';
+      case ACR_VALUES.SOP3:
+        return 'SOP3';
+      default:
+        logger.debug('Unknown ACR value:', acr);
+    }
   }
+
+  // Final fallback: Determine by Emirates ID presence
+  // If Emirates ID is present and valid (15 digits), user is at least SOP2
+  // If no Emirates ID, user is likely SOP1 (unverified)
+  if (emiratesId && emiratesId.length === 15 && /^\d+$/.test(emiratesId)) {
+    logger.info('Determining SOP level from Emirates ID presence - inferred SOP2');
+    return 'SOP2'; // Emirates ID verified = at least SOP2
+  }
+
+  logger.warn('Could not determine SOP level from userType:', userType, 'or acr:', acr, 'or emiratesId');
+  return 'UNKNOWN';
 }
 
 /**
