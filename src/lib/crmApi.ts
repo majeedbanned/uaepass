@@ -5,7 +5,8 @@
  * Updated to support Emirates ID verification and custom fields
  */
 
-import { NormalizedUserProfile } from './uaePass';
+import { NormalizedUserProfile, validateUserType } from './uaePass';
+import { crmLogger as logger } from './logger';
 
 // CRM API Configuration
 export interface CRMConfig {
@@ -767,11 +768,12 @@ export function validateSOPLevel(uaePassUser: NormalizedUserProfile): string | n
  * Main function: Handle CRM login/registration flow after UAE Pass authentication
  * 
  * Flow:
- * 1. Validate SOP level (require SOP2/SOP3 with Emirates ID)
- * 2. Check if user exists in CRM by multiple identifiers
- * 3. If exists: Update Emirates ID details, then get direct login URL
- * 4. If not exists: Register user, update Emirates ID details, then get direct login URL
- * 5. Return the direct login URL for redirect
+ * 1. Validate user type (must be SOP1, SOP2, or SOP3)
+ * 2. Validate SOP level (require SOP2/SOP3 with Emirates ID)
+ * 3. Check if user exists in CRM by multiple identifiers
+ * 4. If exists: Update Emirates ID details, then get direct login URL
+ * 5. If not exists: Register user, update Emirates ID details, then get direct login URL
+ * 6. Return the direct login URL for redirect
  */
 export async function handleCRMAuth(uaePassUser: NormalizedUserProfile): Promise<{
   success: boolean;
@@ -779,16 +781,32 @@ export async function handleCRMAuth(uaePassUser: NormalizedUserProfile): Promise
   isNewUser: boolean;
   crmUserId?: number;
   error?: string;
-  errorType?: 'SOP_LEVEL' | 'CRM_ERROR' | 'REGISTRATION_ERROR' | 'UNKNOWN';
+  errorType?: 'SOP_LEVEL' | 'USER_TYPE_ERROR' | 'CRM_ERROR' | 'REGISTRATION_ERROR' | 'UNKNOWN';
 }> {
   console.log('========================================');
   console.log('[CRM] Starting CRM authentication flow');
   console.log('[CRM] UAE Pass user data:', JSON.stringify(uaePassUser, null, 2));
+  console.log('[CRM] User type:', uaePassUser.userType);
+  console.log('[CRM] ACR:', uaePassUser.acr);
   console.log('========================================');
 
   try {
-    // Step 1: Validate SOP level (require Emirates ID)
-    console.log('[CRM] Step 1: Validating SOP level...');
+    // Step 1: Validate user type (must be SOP1, SOP2, or SOP3)
+    console.log('[CRM] Step 1: Validating user type...');
+    const userTypeError = validateUserType(uaePassUser.userType);
+    if (userTypeError) {
+      console.log('[CRM] User type validation failed:', userTypeError);
+      return {
+        success: false,
+        isNewUser: false,
+        error: userTypeError,
+        errorType: 'USER_TYPE_ERROR',
+      };
+    }
+    console.log('[CRM] User type validation passed:', uaePassUser.userType);
+
+    // Step 2: Validate SOP level (require Emirates ID for SOP2/SOP3)
+    console.log('[CRM] Step 2: Validating SOP level...');
     const sopError = validateSOPLevel(uaePassUser);
     if (sopError) {
       console.log('[CRM] SOP validation failed:', sopError);

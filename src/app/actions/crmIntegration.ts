@@ -22,7 +22,7 @@ function getSessionSecret(): Uint8Array {
 export interface CRMIntegrationResult {
   success: boolean;
   error?: string;
-  errorType?: 'SOP_LEVEL' | 'CRM_ERROR' | 'REGISTRATION_ERROR' | 'SESSION_ERROR' | 'UNKNOWN';
+  errorType?: 'SOP_LEVEL' | 'USER_TYPE_ERROR' | 'CRM_ERROR' | 'REGISTRATION_ERROR' | 'SESSION_ERROR' | 'UNKNOWN';
   crmLoginUrl?: string;
   isNewCRMUser?: boolean;
 }

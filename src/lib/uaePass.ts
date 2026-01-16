@@ -7,6 +7,7 @@
 
 import crypto from 'crypto';
 import { jwtVerify, createRemoteJWKSet, JWTPayload } from 'jose';
+import { uaePassLogger as logger } from './logger';
 
 // UAE PASS Configuration Interface
 export interface UAEPassConfig {
@@ -16,6 +17,7 @@ export interface UAEPassConfig {
   authorizationEndpoint: string;
   tokenEndpoint: string;
   userInfoEndpoint: string;
+  logoutEndpoint: string;
   jwksUri: string;
   issuer: string;
   scope: string;
@@ -43,8 +45,20 @@ export interface UAEPassUserProfile {
   dateOfBirth?: string;
   nationality?: string;
   gender?: string;
+  acr?: string; // Authentication Context Class Reference (SOP level)
+  userType?: string; // User type returned from UAE PASS
   [key: string]: any; // Allow additional fields
 }
+
+// Valid SOP levels from UAE PASS
+export type SOPLevel = 'SOP1' | 'SOP2' | 'SOP3' | 'UNKNOWN';
+
+// ACR (Authentication Context Class Reference) values for SOP levels
+export const ACR_VALUES = {
+  SOP1: 'urn:safelayer:tws:policies:authentication:level:low',
+  SOP2: 'urn:safelayer:tws:policies:authentication:level:substantial',
+  SOP3: 'urn:safelayer:tws:policies:authentication:level:high',
+} as const;
 
 // Normalized User Profile for our application
 export interface NormalizedUserProfile {
@@ -58,6 +72,8 @@ export interface NormalizedUserProfile {
   nationality?: string;
   sub: string; // OIDC subject identifier
   uuid?: string; // UAE PASS user unique ID (UUID format)
+  acr?: string; // ACR value from ID token
+  userType?: SOPLevel; // Determined SOP level
 }
 
 // PKCE Code Challenge and Verifier
@@ -95,6 +111,7 @@ export function getUAEPassConfig(): UAEPassConfig {
     authorizationEndpoint: process.env.UAE_PASS_AUTHORIZATION_ENDPOINT || 'https://stg-id.uaepass.ae/idshub/authorize',
     tokenEndpoint: process.env.UAE_PASS_TOKEN_ENDPOINT || 'https://stg-id.uaepass.ae/idshub/token',
     userInfoEndpoint: process.env.UAE_PASS_USERINFO_ENDPOINT || 'https://stg-id.uaepass.ae/idshub/userinfo',
+    logoutEndpoint: process.env.UAE_PASS_LOGOUT_ENDPOINT || 'https://stg-id.uaepass.ae/idshub/logout',
     jwksUri: process.env.UAE_PASS_JWKS_URI || 'https://stg-id.uaepass.ae/idshub/.well-known/jwks',
     issuer: process.env.UAE_PASS_ISSUER || 'https://stg-id.uaepass.ae',
     // UAE PASS required scope
@@ -175,6 +192,26 @@ export function buildAuthorizationUrl(params: {
 }
 
 /**
+ * Build UAE PASS logout URL
+ * This URL will clear the UAE PASS session and redirect back to the specified URL
+ * Reference: UAE PASS Logout - OIDC RP-Initiated Logout
+ * 
+ * @param redirectUri - The URL to redirect to after logout (defaults to app base URL)
+ */
+export function buildLogoutUrl(redirectUri?: string): string {
+  const config = getUAEPassConfig();
+  
+  // Use provided redirect URI or default to the base app URL
+  const postLogoutRedirect = redirectUri || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  
+  const urlParams = new URLSearchParams({
+    redirect_uri: postLogoutRedirect,
+  });
+
+  return `${config.logoutEndpoint}?${urlParams.toString()}`;
+}
+
+/**
  * Exchange authorization code for tokens
  * Reference: UAE PASS Token Endpoint - OAuth 2.0 Token Request
  * 
@@ -189,14 +226,12 @@ export async function exchangeCodeForTokens(
 ): Promise<TokenResponse> {
   const config = getUAEPassConfig();
 
-  // Debug: Show client_secret length (not the actual secret)
-  console.log('Token exchange debug:', {
+  // Debug: Log token exchange request (sensitive data masked by logger)
+  logger.debug('Token exchange request:', {
     endpoint: config.tokenEndpoint,
     redirect_uri: config.redirectUri,
     client_id: config.clientId,
-    client_secret_length: config.clientSecret.length,
-    client_secret_first_chars: config.clientSecret.substring(0, 3) + '***',
-    code: code.substring(0, 10) + '...',
+    code_length: code.length,
     code_verifier_length: codeVerifier.length,
   });
 
@@ -215,7 +250,7 @@ export async function exchangeCodeForTokens(
     params.append('code_verifier', codeVerifier);
   }
 
-  console.log('Request body params:', params.toString().replace(config.clientSecret, '***SECRET***'));
+  logger.debug('Request body params configured (secrets masked)');
 
   try {
     // Make the token request
@@ -229,7 +264,7 @@ export async function exchangeCodeForTokens(
     });
 
     const responseText = await response.text();
-    console.log('Token response status:', response.status, response.statusText);
+    logger.debug('Token response status:', response.status, response.statusText);
 
     if (!response.ok) {
       let errorData: any = {};
@@ -238,20 +273,15 @@ export async function exchangeCodeForTokens(
       } catch {
         errorData = { error: responseText };
       }
-      console.error('Token exchange error:', {
+      logger.error('Token exchange error:', {
         status: response.status,
-        error: errorData,
+        error: errorData.error,
+        error_description: errorData.error_description,
       });
 
       // If we get invalid_client, suggest checking credentials
       if (errorData.error === 'invalid_client') {
-        console.error('=== INVALID CLIENT ERROR ===');
-        console.error('This usually means:');
-        console.error('1. client_secret is incorrect');
-        console.error('2. client_id and client_secret combination is invalid');
-        console.error('3. Credentials are for wrong environment (staging vs production)');
-        console.error('Please verify your UAE_PASS_CLIENT_SECRET in .env.local');
-        console.error('============================');
+        logger.error('INVALID CLIENT: Verify client_id and client_secret match your UAE PASS environment (staging vs production)');
       }
 
       throw new Error(
@@ -262,7 +292,7 @@ export async function exchangeCodeForTokens(
     }
 
     const tokens: TokenResponse = JSON.parse(responseText);
-    console.log('Token exchange successful!');
+    logger.info('Token exchange successful');
 
     if (!tokens.access_token) {
       throw new Error('Invalid token response: missing access_token');
@@ -432,6 +462,9 @@ export function normalizeUserProfile(profile: UAEPassUserProfile): NormalizedUse
     profile.sub ||             // OIDC subject identifier (usually the UUID)
     undefined;
 
+  // Determine user type from ACR value
+  const userType = determineSOPLevel(profile.acr);
+
   return {
     fullName: fullName || 'N/A',
     firstName: firstName || 'N/A',
@@ -443,7 +476,47 @@ export function normalizeUserProfile(profile: UAEPassUserProfile): NormalizedUse
     nationality: nationality || undefined,
     sub: profile.sub,
     uuid: uuid,
+    acr: profile.acr,
+    userType: userType,
   };
+}
+
+/**
+ * Determine SOP level from ACR (Authentication Context Class Reference) value
+ * 
+ * UAE PASS ACR values:
+ * - urn:safelayer:tws:policies:authentication:level:low = SOP1 (Basic/Unverified)
+ * - urn:safelayer:tws:policies:authentication:level:substantial = SOP2 (Verified)
+ * - urn:safelayer:tws:policies:authentication:level:high = SOP3 (Fully Verified)
+ */
+export function determineSOPLevel(acr?: string): SOPLevel {
+  if (!acr) {
+    // If no ACR provided, determine by Emirates ID presence (fallback)
+    return 'UNKNOWN';
+  }
+
+  switch (acr) {
+    case ACR_VALUES.SOP1:
+      return 'SOP1';
+    case ACR_VALUES.SOP2:
+      return 'SOP2';
+    case ACR_VALUES.SOP3:
+      return 'SOP3';
+    default:
+      logger.warn('Unknown ACR value:', acr);
+      return 'UNKNOWN';
+  }
+}
+
+/**
+ * Validate user type - returns error message if user type is unknown/invalid
+ * Returns null if user type is valid (SOP1, SOP2, or SOP3)
+ */
+export function validateUserType(userType?: SOPLevel): string | null {
+  if (!userType || userType === 'UNKNOWN') {
+    return 'Unknown user type. Your UAE PASS account type is not recognized. Please contact support or try again with a valid UAE PASS account.';
+  }
+  return null; // Valid user type
 }
 
 

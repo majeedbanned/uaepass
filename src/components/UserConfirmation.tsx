@@ -16,7 +16,7 @@ interface UserConfirmationProps {
 }
 
 export default function UserConfirmation({ user }: UserConfirmationProps) {
-  const [status, setStatus] = useState<'confirming' | 'processing' | 'redirecting' | 'error' | 'sop_error' | 'registration_error'>('confirming');
+  const [status, setStatus] = useState<'confirming' | 'processing' | 'redirecting' | 'error' | 'sop_error' | 'registration_error' | 'usertype_error'>('confirming');
   const [error, setError] = useState<string | null>(null);
   const [crmLoginUrl, setCrmLoginUrl] = useState<string | null>(null);
   const [isNewUser, setIsNewUser] = useState<boolean>(false);
@@ -41,6 +41,8 @@ export default function UserConfirmation({ user }: UserConfirmationProps) {
         // Handle different error types
         if (result.errorType === 'SOP_LEVEL') {
           setStatus('sop_error');
+        } else if (result.errorType === 'USER_TYPE_ERROR') {
+          setStatus('usertype_error');
         } else if (result.errorType === 'REGISTRATION_ERROR') {
           setStatus('registration_error');
         } else {
@@ -194,6 +196,75 @@ export default function UserConfirmation({ user }: UserConfirmationProps) {
                   className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors"
                 >
                   Try Again with Different Account
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // User Type Error - Unknown or invalid user type
+  if (status === 'usertype_error') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-red-50 to-pink-100 dark:from-gray-900 dark:to-gray-800">
+        <div className="w-full max-w-lg space-y-4 rounded-2xl bg-white p-8 shadow-xl dark:bg-gray-800">
+          <div className="text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/20">
+              <svg
+                className="h-8 w-8 text-red-600 dark:text-red-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </div>
+            <h1 className="mt-4 text-2xl font-bold text-gray-900 dark:text-white">
+              Unrecognized Account Type
+            </h1>
+            <div className="mt-4 rounded-lg bg-red-50 dark:bg-red-900/10 p-4 text-left">
+              <p className="text-sm text-red-800 dark:text-red-200">
+                {error}
+              </p>
+            </div>
+            
+            <div className="mt-6 space-y-4">
+              <div className="rounded-lg bg-gray-50 dark:bg-gray-700/50 p-4 text-left">
+                <h3 className="font-medium text-gray-800 dark:text-gray-200 mb-2">
+                  What this means:
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  Your UAE PASS account type could not be recognized. This may happen if:
+                </p>
+                <ul className="mt-2 text-sm text-gray-600 dark:text-gray-300 list-disc list-inside space-y-1">
+                  <li>Your account is in an unusual state</li>
+                  <li>There was a communication error with UAE PASS</li>
+                  <li>Your account type is not supported</li>
+                </ul>
+              </div>
+              
+              <div className="flex flex-col gap-3">
+                <a
+                  href="mailto:support@cmsfinancial.ae?subject=UAE PASS Account Type Issue"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  Contact Support
+                </a>
+                <a
+                  href="/uae-pass/login"
+                  className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors"
+                >
+                  Try Again
                 </a>
               </div>
             </div>

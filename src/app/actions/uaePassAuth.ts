@@ -64,11 +64,15 @@ export async function processUAEPassAuth(
     const tokens = await exchangeCodeForTokens(code, codeVerifier);
     console.log('Token exchange successful');
 
-    // Step 3: Validate ID token (optional - may fail with different issuer configs)
+    // Step 3: Validate ID token and extract ACR (authentication level)
+    let acrValue: string | undefined;
     try {
       if (tokens.id_token) {
-        await validateIdToken(tokens.id_token, nonce);
+        const idTokenPayload = await validateIdToken(tokens.id_token, nonce);
         console.log('ID token validated');
+        // Extract ACR (Authentication Context Class Reference) which indicates SOP level
+        acrValue = idTokenPayload.acr as string | undefined;
+        console.log('ACR value from ID token:', acrValue);
       }
     } catch (validationError) {
       console.warn('ID token validation warning (continuing anyway):', validationError);
@@ -81,8 +85,14 @@ export async function processUAEPassAuth(
     console.log('User info fetched - RAW RESPONSE:', JSON.stringify(userInfo, null, 2));
     console.log('Available fields:', Object.keys(userInfo));
 
+    // Add ACR value to userInfo for normalization
+    if (acrValue) {
+      userInfo.acr = acrValue;
+    }
+
     // Step 5: Normalize user profile
     const normalizedProfile = normalizeUserProfile(userInfo);
+    console.log('Normalized profile with user type:', normalizedProfile.userType);
     console.log('Normalized profile:', JSON.stringify(normalizedProfile, null, 2));
 
     // Step 6: Create session (store user info temporarily)
