@@ -89,15 +89,15 @@ export default async function CallbackPage({ searchParams }: CallbackPageProps) 
               </svg>
             </div>
             <h1 className="mt-4 text-2xl font-bold text-gray-900 dark:text-white">
-              Authentication Failed
+         User cancelled the Login
             </h1>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+            {/* <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
               {params.error_description || params.error || 'An unknown error occurred'}
-            </p>
+            </p> */}
             <div className="mt-4 rounded-lg bg-red-50 dark:bg-red-900/10 p-3">
-              <p className="text-xs text-red-700 dark:text-red-300 font-mono">
+              {/* <p className="text-xs text-red-700 dark:text-red-300 font-mono">
                 Error Code: {params.error}
-              </p>
+              </p> */}
             </div>
             <div className="mt-6 flex flex-col gap-3">
               <a

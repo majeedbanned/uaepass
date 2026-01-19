@@ -427,10 +427,17 @@ export default function UserConfirmation({ user }: UserConfirmationProps) {
               </div>
               <div className="ml-3">
                 <h3 className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                  Emirates ID Not Verified
+                You are not eligible to
+                access this service.
                 </h3>
                 <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
-                  Your UAE PASS account appears to be unverified (SOP1). You need a verified account (SOP2 or SOP3) with Emirates ID to continue. Please upgrade your UAE PASS account first.
+                                  You are not eligible to
+access this service. Your
+account is either not
+upgraded or you have a
+visitor account. Please
+contact Cms Financial to
+access the services
                 </p>
               </div>
             </div>
