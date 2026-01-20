@@ -130,10 +130,9 @@ export default function CallbackHandler({ code, state }: CallbackHandlerProps) {
               Account Verification Required
             </h1>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              You are not eligible to access this service. Your UAE PASS account is not verified (SOP1). 
-              You need to upgrade your account to SOP2 or SOP3 to access CMS Financial services.
+            You are not eligible to access this service. Your account is either not upgraded or you have a visitor account. Please contact CMS Financial to access the services
             </p>
-            <div className="mt-4 rounded-lg bg-yellow-50 dark:bg-yellow-900/10 p-4 text-left">
+            {/* <div className="mt-4 rounded-lg bg-yellow-50 dark:bg-yellow-900/10 p-4 text-left">
               <p className="text-sm text-yellow-800 dark:text-yellow-200">
                 <strong>What you need to do:</strong>
               </p>
@@ -142,10 +141,10 @@ export default function CallbackHandler({ code, state }: CallbackHandlerProps) {
                 <li>Contact UAE PASS support to complete the verification process</li>
                 <li>Once verified, you can access CMS Financial services</li>
               </ul>
-            </div>
+            </div> */}
             <div className="mt-6 flex flex-col gap-3">
               <a
-                href="/"
+                href="https://my.cmsfinancial.ae/login?uaepass"
                 className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
               >
                 Go to Home
