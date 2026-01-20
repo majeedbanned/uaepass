@@ -31,9 +31,21 @@ export default function CallbackHandler({ code, state }: CallbackHandlerProps) {
         console.log('[UI] UAE PASS auth result:', result);
 
         if (result.success && result.user) {
-          console.log('[UI] User info received, showing confirmation screen');
-          setUser(result.user);
-          setStatus('confirming');
+          // Check if Emirates ID is missing (SOP1 scenario)
+          const isSOP1 = !result.user.emiratesId || 
+                        result.user.emiratesId === 'N/A' || 
+                        result.user.emiratesId === '';
+          
+          if (isSOP1) {
+            // SOP1 users - show error message only, no user info or buttons
+            setStatus('error');
+            setError('SOP1_ERROR'); // Special flag for SOP1 error
+          } else {
+            // SOP2/SOP3 users - show confirmation screen with user info
+            console.log('[UI] User info received, showing confirmation screen');
+            setUser(result.user);
+            setStatus('confirming');
+          }
         } else {
           setStatus('error');
           setError(result.error || 'Authentication failed');
@@ -91,6 +103,61 @@ export default function CallbackHandler({ code, state }: CallbackHandlerProps) {
   }
 
   // Error state
+  const isSOP1Error = error === 'SOP1_ERROR';
+  
+  if (isSOP1Error) {
+    // SOP1 error - show only message, no user info or buttons
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+        <div className="w-full max-w-md space-y-4 rounded-2xl bg-white p-8 shadow-xl dark:bg-gray-800">
+          <div className="text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-yellow-100 dark:bg-yellow-900/20">
+              <svg
+                className="h-6 w-6 text-yellow-600 dark:text-yellow-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+            </div>
+            <h1 className="mt-4 text-2xl font-bold text-gray-900 dark:text-white">
+              Account Verification Required
+            </h1>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              You are not eligible to access this service. Your UAE PASS account is not verified (SOP1). 
+              You need to upgrade your account to SOP2 or SOP3 to access CMS Financial services.
+            </p>
+            <div className="mt-4 rounded-lg bg-yellow-50 dark:bg-yellow-900/10 p-4 text-left">
+              <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                <strong>What you need to do:</strong>
+              </p>
+              <ul className="mt-2 text-sm text-yellow-700 dark:text-yellow-300 list-disc list-inside space-y-1">
+                <li>Upgrade your UAE PASS account to verify your Emirates ID</li>
+                <li>Contact UAE PASS support to complete the verification process</li>
+                <li>Once verified, you can access CMS Financial services</li>
+              </ul>
+            </div>
+            <div className="mt-6 flex flex-col gap-3">
+              <a
+                href="/"
+                className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
+              >
+                Go to Home
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Other errors - show generic error message
   return (
     <div className="flex min-h-screen items-center justify-center bg-red-50 dark:bg-gray-900">
       <div className="w-full max-w-md space-y-4 rounded-2xl bg-white p-8 shadow-xl dark:bg-gray-800">
