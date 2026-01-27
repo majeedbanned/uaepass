@@ -552,13 +552,18 @@ export async function fetchUserInfo(accessToken: string): Promise<UAEPassUserPro
   const config = getUAEPassConfig();
 
   try {
-    const response = await fetch(config.userInfoEndpoint, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
+    // Use retry logic with HTTPS fallback for DNS issues
+    const response = await fetchWithRetry(
+      config.userInfoEndpoint,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
       },
-    });
+      3 // max retries
+    );
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
