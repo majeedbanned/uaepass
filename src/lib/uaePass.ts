@@ -7,6 +7,7 @@
 
 import crypto from 'crypto';
 import dns from 'dns';
+import https from 'https';
 import { jwtVerify, createRemoteJWKSet, JWTPayload } from 'jose';
 import { uaePassLogger as logger } from './logger';
 
@@ -222,9 +223,10 @@ export function buildLogoutUrl(redirectUri?: string): string {
  * - Grant type, code, and redirect_uri
  */
 /**
- * Resolve DNS and retry fetch with fallback to direct IP if DNS fails
+ * Fetch with retry logic and DNS error handling
+ * Uses native https module as fallback if fetch fails with DNS errors
  */
-async function fetchWithDNSFallback(
+async function fetchWithRetry(
   url: string,
   options: RequestInit,
   maxRetries: number = 3
@@ -232,7 +234,7 @@ async function fetchWithDNSFallback(
   const urlObj = new URL(url);
   const hostname = urlObj.hostname;
   
-  // Try to resolve DNS first
+  // Resolve DNS first to have IP ready for fallback
   let resolvedIP: string | null = null;
   try {
     const dnsPromises = dns.promises;
@@ -242,63 +244,117 @@ async function fetchWithDNSFallback(
       logger.debug('DNS resolved:', { hostname, ip: resolvedIP });
     }
   } catch (dnsError) {
-    logger.warn('DNS resolution failed, will try direct fetch:', dnsError);
+    logger.debug('DNS pre-resolution failed (will retry on fetch):', dnsError);
   }
 
-  // Retry logic with exponential backoff
+  // Simple retry logic
   let lastError: Error | null = null;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       if (attempt > 0) {
-        // Exponential backoff: 100ms, 200ms, 400ms
-        const delay = 100 * Math.pow(2, attempt - 1);
+        const delay = 200 * attempt; // 200ms, 400ms delays
         logger.debug(`Retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
 
-      // If DNS resolved and we're on retry, try using direct IP
-      if (resolvedIP && attempt > 0) {
-        logger.debug('Using direct IP fallback:', resolvedIP);
-        const directUrl = url.replace(hostname, resolvedIP);
-        const response = await fetch(directUrl, {
-          ...options,
-          headers: {
-            ...options.headers,
-            'Host': hostname, // Important: set Host header for SNI
-          },
-        });
-        return response;
-      }
-
-      // Normal fetch attempt
+      // Try fetch
       const response = await fetch(url, options);
       return response;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       
-      // If it's a DNS error and we have a resolved IP, try direct IP on next retry
-      if (
-        (lastError.message.includes('EAI_AGAIN') || 
-         lastError.message.includes('getaddrinfo') ||
-         lastError.message.includes('ENOTFOUND')) &&
-        resolvedIP &&
-        attempt < maxRetries - 1
-      ) {
-        logger.warn(`DNS error on attempt ${attempt + 1}, will try direct IP on next retry`);
-        continue;
+      const isDNSError = lastError.message.includes('EAI_AGAIN') || 
+                         lastError.message.includes('getaddrinfo') ||
+                         lastError.message.includes('ENOTFOUND') ||
+                         lastError.message.includes('fetch failed');
+      
+      // If DNS error and we have resolved IP, use https module fallback on last attempt
+      if (isDNSError && resolvedIP && attempt === maxRetries - 1) {
+        logger.warn('Using HTTPS module fallback due to DNS issues');
+        return await fetchWithHttpsModule(urlObj, resolvedIP, options);
       }
       
-      // If not last attempt, continue to retry
+      // If not last attempt, continue retrying
       if (attempt < maxRetries - 1) {
         continue;
       }
-      
-      // Last attempt failed
-      throw lastError;
+    }
+  }
+
+  // Final fallback if we have IP
+  if (resolvedIP && lastError) {
+    const isDNSError = lastError.message.includes('EAI_AGAIN') || 
+                       lastError.message.includes('getaddrinfo') ||
+                       lastError.message.includes('ENOTFOUND') ||
+                       lastError.message.includes('fetch failed');
+    if (isDNSError) {
+      logger.warn('Using HTTPS module fallback on final attempt');
+      return await fetchWithHttpsModule(urlObj, resolvedIP, options);
     }
   }
 
   throw lastError || new Error('Fetch failed after all retries');
+}
+
+/**
+ * Fallback to native https module when fetch fails
+ */
+async function fetchWithHttpsModule(
+  urlObj: URL,
+  ipAddress: string,
+  options: RequestInit
+): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    const body = options.body as string | undefined;
+    
+    const requestOptions = {
+      hostname: ipAddress,
+      port: 443,
+      path: urlObj.pathname + urlObj.search,
+      method: options.method || 'GET',
+      headers: {
+        ...(options.headers as Record<string, string>),
+        'Host': urlObj.hostname, // Important for SNI
+      },
+      timeout: 30000,
+    };
+
+    const req = https.request(requestOptions, (res: any) => {
+      let data = '';
+      res.on('data', (chunk: Buffer) => {
+        data += chunk.toString();
+      });
+      
+      res.on('end', () => {
+        try {
+          // Create Response object (available in Node.js 18+)
+          const response = new Response(data, {
+            status: res.statusCode || 200,
+            statusText: res.statusMessage || 'OK',
+            headers: res.headers as HeadersInit,
+          });
+          resolve(response);
+        } catch (responseError) {
+          reject(new Error(`Failed to create response: ${responseError}`));
+        }
+      });
+    });
+
+    req.on('error', (error: Error) => {
+      reject(error);
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Request timeout'));
+    });
+
+    if (body) {
+      req.write(body);
+    }
+    
+    req.end();
+  });
 }
 
 export async function exchangeCodeForTokens(
@@ -342,8 +398,8 @@ export async function exchangeCodeForTokens(
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
     try {
-      // Make the token request with timeout and DNS fallback
-      const response = await fetchWithDNSFallback(
+      // Make the token request with timeout and retry logic
+      const response = await fetchWithRetry(
         config.tokenEndpoint,
         {
           method: 'POST',
