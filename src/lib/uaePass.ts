@@ -223,8 +223,8 @@ export function buildLogoutUrl(redirectUri?: string): string {
  * - Grant type, code, and redirect_uri
  */
 /**
- * Fetch with retry logic and DNS error handling
- * Uses native https module as fallback if fetch fails with DNS errors
+ * Fetch using HTTPS module first (more reliable for DNS issues)
+ * Falls back to fetch API only if HTTPS module fails
  */
 async function fetchWithRetry(
   url: string,
@@ -234,7 +234,7 @@ async function fetchWithRetry(
   const urlObj = new URL(url);
   const hostname = urlObj.hostname;
   
-  // Resolve DNS first to have IP ready for fallback
+  // Resolve DNS first to get IP address
   let resolvedIP: string | null = null;
   try {
     const dnsPromises = dns.promises;
@@ -244,52 +244,39 @@ async function fetchWithRetry(
       logger.debug('DNS resolved:', { hostname, ip: resolvedIP });
     }
   } catch (dnsError) {
-    logger.debug('DNS pre-resolution failed (will retry on fetch):', dnsError);
+    logger.warn('DNS resolution failed, will try fetch API:', dnsError);
   }
 
-  // Simple retry logic
+  // Try HTTPS module first (more reliable)
+  if (resolvedIP) {
+    try {
+      logger.debug('Using HTTPS module with resolved IP');
+      return await fetchWithHttpsModule(urlObj, resolvedIP, options);
+    } catch (httpsError) {
+      logger.warn('HTTPS module failed, falling back to fetch API:', httpsError);
+      // Continue to fetch fallback below
+    }
+  }
+
+  // Fallback to fetch API with retry logic
   let lastError: Error | null = null;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       if (attempt > 0) {
         const delay = 200 * attempt; // 200ms, 400ms delays
-        logger.debug(`Retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms`);
+        logger.debug(`Fetch retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
 
-      // Try fetch
       const response = await fetch(url, options);
       return response;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       
-      const isDNSError = lastError.message.includes('EAI_AGAIN') || 
-                         lastError.message.includes('getaddrinfo') ||
-                         lastError.message.includes('ENOTFOUND') ||
-                         lastError.message.includes('fetch failed');
-      
-      // If DNS error and we have resolved IP, use https module fallback on last attempt
-      if (isDNSError && resolvedIP && attempt === maxRetries - 1) {
-        logger.warn('Using HTTPS module fallback due to DNS issues');
-        return await fetchWithHttpsModule(urlObj, resolvedIP, options);
-      }
-      
       // If not last attempt, continue retrying
       if (attempt < maxRetries - 1) {
         continue;
       }
-    }
-  }
-
-  // Final fallback if we have IP
-  if (resolvedIP && lastError) {
-    const isDNSError = lastError.message.includes('EAI_AGAIN') || 
-                       lastError.message.includes('getaddrinfo') ||
-                       lastError.message.includes('ENOTFOUND') ||
-                       lastError.message.includes('fetch failed');
-    if (isDNSError) {
-      logger.warn('Using HTTPS module fallback on final attempt');
-      return await fetchWithHttpsModule(urlObj, resolvedIP, options);
     }
   }
 
