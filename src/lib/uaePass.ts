@@ -108,12 +108,12 @@ export function getUAEPassConfig(): UAEPassConfig {
     clientSecret,
     redirectUri: process.env.UAE_PASS_REDIRECT_URI || 'http://localhost:3000/uae-pass/callback',
     // UAE PASS Staging endpoints (default)
-    authorizationEndpoint: process.env.UAE_PASS_AUTHORIZATION_ENDPOINT || 'https://stg-id.uaepass.ae/idshub/authorize',
-    tokenEndpoint: process.env.UAE_PASS_TOKEN_ENDPOINT || 'https://stg-id.uaepass.ae/idshub/token',
-    userInfoEndpoint: process.env.UAE_PASS_USERINFO_ENDPOINT || 'https://stg-id.uaepass.ae/idshub/userinfo',
-    logoutEndpoint: process.env.UAE_PASS_LOGOUT_ENDPOINT || 'https://stg-id.uaepass.ae/idshub/logout',
-    jwksUri: process.env.UAE_PASS_JWKS_URI || 'https://stg-id.uaepass.ae/idshub/.well-known/jwks',
-    issuer: process.env.UAE_PASS_ISSUER || 'https://stg-id.uaepass.ae',
+    authorizationEndpoint: process.env.UAE_PASS_AUTHORIZATION_ENDPOINT || 'https://id.uaepass.ae/idshub/authorize',
+    tokenEndpoint: process.env.UAE_PASS_TOKEN_ENDPOINT || 'https://id.uaepass.ae/idshub/token',
+    userInfoEndpoint: process.env.UAE_PASS_USERINFO_ENDPOINT || 'https://id.uaepass.ae/idshub/userinfo',
+    logoutEndpoint: process.env.UAE_PASS_LOGOUT_ENDPOINT || 'https://id.uaepass.ae/idshub/logout',
+    jwksUri: process.env.UAE_PASS_JWKS_URI || 'https://id.uaepass.ae/idshub/.well-known/jwks',
+    issuer: process.env.UAE_PASS_ISSUER || 'https://id.uaepass.ae',
     // UAE PASS required scope
     scope: process.env.UAE_PASS_SCOPE || 'urn:uae:digitalid:profile:general',
   };
