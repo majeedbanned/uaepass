@@ -6,6 +6,7 @@
  */
 
 import crypto from 'crypto';
+import dns from 'dns';
 import { jwtVerify, createRemoteJWKSet, JWTPayload } from 'jose';
 import { uaePassLogger as logger } from './logger';
 
@@ -220,6 +221,86 @@ export function buildLogoutUrl(redirectUri?: string): string {
  * - Client credentials in the body (client_id, client_secret)
  * - Grant type, code, and redirect_uri
  */
+/**
+ * Resolve DNS and retry fetch with fallback to direct IP if DNS fails
+ */
+async function fetchWithDNSFallback(
+  url: string,
+  options: RequestInit,
+  maxRetries: number = 3
+): Promise<Response> {
+  const urlObj = new URL(url);
+  const hostname = urlObj.hostname;
+  
+  // Try to resolve DNS first
+  let resolvedIP: string | null = null;
+  try {
+    const dnsPromises = dns.promises;
+    const addresses = await dnsPromises.resolve4(hostname);
+    if (addresses && addresses.length > 0) {
+      resolvedIP = addresses[0];
+      logger.debug('DNS resolved:', { hostname, ip: resolvedIP });
+    }
+  } catch (dnsError) {
+    logger.warn('DNS resolution failed, will try direct fetch:', dnsError);
+  }
+
+  // Retry logic with exponential backoff
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      if (attempt > 0) {
+        // Exponential backoff: 100ms, 200ms, 400ms
+        const delay = 100 * Math.pow(2, attempt - 1);
+        logger.debug(`Retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+
+      // If DNS resolved and we're on retry, try using direct IP
+      if (resolvedIP && attempt > 0) {
+        logger.debug('Using direct IP fallback:', resolvedIP);
+        const directUrl = url.replace(hostname, resolvedIP);
+        const response = await fetch(directUrl, {
+          ...options,
+          headers: {
+            ...options.headers,
+            'Host': hostname, // Important: set Host header for SNI
+          },
+        });
+        return response;
+      }
+
+      // Normal fetch attempt
+      const response = await fetch(url, options);
+      return response;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      
+      // If it's a DNS error and we have a resolved IP, try direct IP on next retry
+      if (
+        (lastError.message.includes('EAI_AGAIN') || 
+         lastError.message.includes('getaddrinfo') ||
+         lastError.message.includes('ENOTFOUND')) &&
+        resolvedIP &&
+        attempt < maxRetries - 1
+      ) {
+        logger.warn(`DNS error on attempt ${attempt + 1}, will try direct IP on next retry`);
+        continue;
+      }
+      
+      // If not last attempt, continue to retry
+      if (attempt < maxRetries - 1) {
+        continue;
+      }
+      
+      // Last attempt failed
+      throw lastError;
+    }
+  }
+
+  throw lastError || new Error('Fetch failed after all retries');
+}
+
 export async function exchangeCodeForTokens(
   code: string,
   codeVerifier: string
@@ -261,16 +342,20 @@ export async function exchangeCodeForTokens(
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
     try {
-      // Make the token request with timeout
-      const response = await fetch(config.tokenEndpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Accept': 'application/json',
+      // Make the token request with timeout and DNS fallback
+      const response = await fetchWithDNSFallback(
+        config.tokenEndpoint,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json',
+          },
+          body: params.toString(),
+          signal: controller.signal,
         },
-        body: params.toString(),
-        signal: controller.signal,
-      });
+        3 // max retries
+      );
 
       clearTimeout(timeoutId);
 
