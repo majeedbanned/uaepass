@@ -253,54 +253,111 @@ export async function exchangeCodeForTokens(
   logger.debug('Request body params configured (secrets masked)');
 
   try {
-    // Make the token request
-    const response = await fetch(config.tokenEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Accept': 'application/json',
-      },
-      body: params.toString(),
-    });
+    // Log the endpoint being called for debugging
+    logger.debug('Calling token endpoint:', config.tokenEndpoint);
+    
+    // Create AbortController for timeout handling
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-    const responseText = await response.text();
-    logger.debug('Token response status:', response.status, response.statusText);
-
-    if (!response.ok) {
-      let errorData: any = {};
-      try {
-        errorData = JSON.parse(responseText);
-      } catch {
-        errorData = { error: responseText };
-      }
-      logger.error('Token exchange error:', {
-        status: response.status,
-        error: errorData.error,
-        error_description: errorData.error_description,
+    try {
+      // Make the token request with timeout
+      const response = await fetch(config.tokenEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json',
+        },
+        body: params.toString(),
+        signal: controller.signal,
       });
 
-      // If we get invalid_client, suggest checking credentials
-      if (errorData.error === 'invalid_client') {
-        logger.error('INVALID CLIENT: Verify client_id and client_secret match your UAE PASS environment (staging vs production)');
+      clearTimeout(timeoutId);
+
+      const responseText = await response.text();
+      logger.debug('Token response status:', response.status, response.statusText);
+
+      if (!response.ok) {
+        let errorData: any = {};
+        try {
+          errorData = JSON.parse(responseText);
+        } catch {
+          errorData = { error: responseText };
+        }
+        logger.error('Token exchange error:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData.error,
+          error_description: errorData.error_description,
+          responseBody: responseText.substring(0, 500), // First 500 chars
+        });
+
+        // If we get invalid_client, suggest checking credentials
+        if (errorData.error === 'invalid_client') {
+          logger.error('INVALID CLIENT: Verify client_id and client_secret match your UAE PASS environment (staging vs production)');
+        }
+
+        throw new Error(
+          errorData.error_description ||
+          errorData.error ||
+          `Token exchange failed with status ${response.status}: ${response.statusText}`
+        );
       }
 
+      const tokens: TokenResponse = JSON.parse(responseText);
+      logger.info('Token exchange successful');
+
+      if (!tokens.access_token) {
+        throw new Error('Invalid token response: missing access_token');
+      }
+
+      return tokens;
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      
+      // Handle abort (timeout)
+      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+        logger.error('Token exchange timeout:', {
+          endpoint: config.tokenEndpoint,
+          timeout: '30s',
+        });
+        throw new Error('Token exchange timed out after 30 seconds. Please check your network connection and try again.');
+      }
+      
+      // Re-throw to be handled by outer catch
+      throw fetchError;
+    }
+  } catch (error) {
+    // Enhanced error handling with more context
+    logger.error('Token exchange catch block - error details:', {
+      errorType: error?.constructor?.name,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : undefined,
+      errorCause: error instanceof Error ? error.cause : undefined,
+      endpoint: config.tokenEndpoint,
+    });
+
+    if (error instanceof TypeError && (error.message.includes('fetch') || error.message.includes('Failed to fetch'))) {
+      logger.error('Network error during token exchange:', {
+        endpoint: config.tokenEndpoint,
+        error: error.message,
+        cause: error.cause,
+        stack: error.stack,
+      });
       throw new Error(
-        errorData.error_description ||
-        errorData.error ||
-        `Token exchange failed with status ${response.status}`
+        `Failed to connect to UAE PASS token endpoint. ` +
+        `Please verify: 1) Network connectivity, 2) Token endpoint URL is correct (${config.tokenEndpoint}), ` +
+        `3) SSL/TLS certificate is valid, 4) No firewall/proxy blocking the request. ` +
+        `5) DNS can resolve ${new URL(config.tokenEndpoint).hostname}. ` +
+        `Original error: ${error.message}`
       );
     }
-
-    const tokens: TokenResponse = JSON.parse(responseText);
-    logger.info('Token exchange successful');
-
-    if (!tokens.access_token) {
-      throw new Error('Invalid token response: missing access_token');
-    }
-
-    return tokens;
-  } catch (error) {
+    
     if (error instanceof Error) {
+      // If error message already contains our custom message, just re-throw
+      if (error.message.includes('Token exchange') || error.message.includes('Failed to connect') || error.message.includes('timed out')) {
+        throw error;
+      }
       throw new Error(`Failed to exchange code for tokens: ${error.message}`);
     }
     throw new Error('Failed to exchange code for tokens: Unknown error');
